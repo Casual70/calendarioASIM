@@ -1,0 +1,113 @@
+TYPE,CONTENT,DESCRIPTION,CALENDAR_LAYOUT,CALENDAR_VISIBLE_DAY_COUNT,CALENDAR_COLOR,ICON,IS_COLLAPSED,PRIORITY,INDENT,AUTHOR,RESPONSIBLE,DATE,DATE_LANG,TIMEZONE,DURATION,DURATION_UNIT,DEADLINE,DEADLINE_LANG,REMINDER_TYPE,REMINDER_OFFSET,REMINDER_DATE,REMINDER_DATE_LANG
+meta,view_style=calendar,,MONTH,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,
+task,GOODWIN LUKE BERNARD C03 @Goracci,"PDR: 11714040220001
+Matricola : 5238698
+Tecnico: Goracci
+Indirizzo: VIA BORGO VECCHIO 2 
+Telefono: 
+NOTE:",,,,,,2,1,Filippo (5530890),,63 days ago at 09:30,en,Europe/Rome,,,,,,,,
+task,Lavoro 12 staffe in via degli alfieri,,,,,,,4,1,Filippo (5530890),,4 days ago,en,Europe/Rome,,,,,,,,
+task,CHIONCHINI ALFREDO C03 @Goracci,"PDR: 11714040100016
+Matricola : 5233492 
+Tecnico: Goracci
+Indirizzo:  VIALE FORTEBRACCI 12
+Telefono: 3405050301
+NOTE:",,,,,,3,1,Filippo (5530890),,in 9 days at 09:30,en,Europe/Rome,,,,,,,,
+task,TIRONZELLI ROLANDO C03 @Goracci,"PDR: 11714040180004
+Matricola : 5004771 
+Tecnico: Goracci
+Indirizzo:  VIA POLIDORI 2
+Telefono: 3405050301
+NOTE:",,,,,,3,1,Filippo (5530890),,in 9 days at 10:30,en,Europe/Rome,,,,,,,,
+task,POSTE ITALIANE S.P.A. FILIALE DI PERUGIA C03 @Goracci,"PDR: 11714040130001
+Matricola : 5233466
+Tecnico: Goracci
+Indirizzo: PIAZZA FORTEBRACCIO 1
+Telefono: 
+NOTE:",,,,,,3,1,Filippo (5530890),,in 9 days at 11:30,en,Europe/Rome,,,,,,,,
+task,SONAGLIA MATTEO A40 @Goracci,"PDR: 11710000001691
+Matricola : 
+Tecnico: Goracci
+Indirizzo: VIA GIUSEPPE RONDONI 24
+Telefono: 3490583326
+NOTE:",,,,,,4,1,Filippo (5530890),,7 days ago at 10:30,en,Europe/Rome,,,,,,,,
+task,TRAORE NOBIDJIA A01 @Goracci,"PDR: 11712010090062
+Matricola : 30397158
+Tecnico: Goracci
+Indirizzo: VIALE M. K. GANDHI 7
+Telefono: 3203280059
+NOTE:",,,,,,4,1,Filippo (5530890),,in 2 days at 09:30,en,Europe/Rome,,,,,,,,
+task,Sonaglia Nicola C03 @Goracci,"PDR: 11714040020003
+Matricola : 2946968
+Tecnico: Goracci
+Indirizzo: Via Antonio Gramsci 2
+Telefono: 3348007564
+NOTE:",,,,,,3,1,Filippo (5530890),,5 days ago at 15:30,en,Europe/Rome,,,,,,,,
+task,LUNGHI THOMAS A01 @Goracci,"PDR: 11710000001672
+Matricola : 000
+Tecnico: Goracci
+Indirizzo: PIAZZA CADUTI DEL LAVORO 3
+Telefono: 3470734507
+NOTE:",,,,,,4,1,Filippo (5530890),,5 days ago at 11:30,en,Europe/Rome,,,,,,,,
+task,TOUCHANT FATIMA A01 @Goracci,"PDR: 11712010680011
+Matricola : 2043599
+Tecnico: Goracci
+Indirizzo: VIA GIUSEPPE LOMBARDO RADICE 4
+Telefono: 3284610353
+NOTE:",,,,,,4,1,Filippo (5530890),,today at 12:30,en,Europe/Rome,,,,,,,,
+task,PUGGIONINU MARIA ANTONIETTA A01 @Goracci,"PDR: 11712011130001
+Matricola : 30407768
+Tecnico: Goracci
+Indirizzo: PUGGIONINU MARIA ANTONIETTA
+Telefono: 3319833513
+NOTE:",,,,,,4,1,Filippo (5530890),,in 2 days at 10:30,en,Europe/Rome,,,,,,,,
+task,ABBASSI EP HAJRI MAHJOUBA A01 @Goracci,"PDR: 11711030040019
+Matricola : 36045215
+Tecnico: Goracci
+Indirizzo: VIA GIOVANNI BOCCACCIO 3
+Telefono: 3270607457
+NOTE:",,,,,,4,1,Filippo (5530890),,in 3 days at 09:30,en,Europe/Rome,,,,,,,,
+task,SUN YUEJUN D01 @Goracci,"PDR: 11712011520018
+Matricola : 00050314
+Tecnico: Goracci
+Indirizzo: VIA UMBRIA 5
+Telefono: 3388620699-3773914486 Ferid
+NOTE:",,,,,,4,1,Filippo (5530890),,today at 11:30,en,Europe/Rome,,,,,,,,
+task,MAGLIERIA UMBRA DI CAVEDON GIAN DOMENICO D01 @Goracci,"PDR: 11710000001546
+Matricola : 22210093837
+Tecnico: Goracci
+Indirizzo: VIA MADONNA DEL MORO 1
+Telefono: 0756973628
+NOTE:",,,,,,4,1,Filippo (5530890),,today at 10:30,en,Europe/Rome,,,,,,,,
+task,MERCATI MARIA DOLORES D01 @Serpolini,"PDR: 11711050200032
+Matricola : 19210780759
+Tecnico: Serpolini
+Indirizzo: VIA UMBRA 9
+Telefono: 3917040927
+NOTE:",,,,,,4,1,Filippo (5530890),,tomorrow at 09:30,en,Europe/Rome,,,,,,,,
+task,TANZI MICHELE D01 @Serpolini,"PDR: 11711050130030
+Matricola : 26872
+Tecnico: Serpolini
+Indirizzo: VIALe FRANCESCO NARDI 67
+Telefono: 3396630590
+NOTE:",,,,,,4,1,Filippo (5530890),,tomorrow at 10:30,en,Europe/Rome,,,,,,,,
+task,NARDI EMILIA A01 @Serpolini,"PDR: 11711050010021
+Matricola : 2529255
+Tecnico: Serpolini
+Indirizzo: VIA DELLA STAZIONE 123
+Telefono: 3355272022
+NOTE:",,,,,,4,1,Filippo (5530890),,tomorrow at 11:30,en,Europe/Rome,,,,,,,,
+task,SHURBI DORJAN A01 @Goracci,"PDR: 11712010710048
+Matricola : 5631352
+Tecnico: Goracci
+Indirizzo: VIA GIUSEPPE MASTRIFORTI 1
+Telefono: 3519388256
+NOTE:",,,,,,4,1,Filippo (5530890),,in 7 days at 10:30,en,Europe/Rome,,,,,,,,
+task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137
+Matricola : 6725567
+Tecnico: Goracci
+Indirizzo: VIALE MARTIRI DELLA LIBERTA 6
+Telefono: 3277907314
+NOTE:",,,,,,4,1,Filippo (5530890),,in 7 days at 09:30,en,Europe/Rome,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,

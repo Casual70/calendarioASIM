@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASIM Multiservices - Pagina con Calendario Incorporato</title>
+  
+  <!-- Stili del sito ospitante (simulazione) -->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: #333;
+    }
+    header {
+      background-color: #1e3a8a;
+      color: white;
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+    nav a {
+      color: #bfdbfe;
+      text-decoration: none;
+      margin-left: 20px;
+      font-size: 0.95rem;
+    }
+    nav a:hover {
+      color: white;
+    }
+    .main-container {
+      max-width: 1350px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .intro-banner {
+      background: white;
+      padding: 20px 24px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+
+  <!-- 1. CSS DEL CALENDARIO ASIM -->
+  <link rel="stylesheet" href="calendario_custom/css/calendar.css">
+</head>
+<body>
+
+  <!-- Header del sito esistente -->
+  <header>
+    <h1>ASIM Multiservices</h1>
+    <nav>
+      <a href="#">Home</a>
+      <a href="#">Servizi</a>
+      <a href="#" style="color:white; font-weight:bold;">Calendario</a>
+      <a href="#">Contatti</a>
+    </nav>
+  </header>
+
+  <div class="main-container">
+    <div class="intro-banner">
+      <h2>Pianificazione e Interventi Tecnici</h2>
+      <p>Questa pagina dimostra l'incorporamento (embed) del componente calendario all'interno dell'elemento <code>#calendario_custom</code> del sito.</p>
+    </div>
+
+    <!-- 2. ELEMENTO TARGET PER L'INCORPORAMENTO -->
+    <div id="calendario_custom"></div>
+
+  </div>
+
+  <footer>
+    &copy; ASIM Multiservices - Tutti i diritti riservati.
+  </footer>
+
+  <!-- 3. SCRIPT JS DEL CALENDARIO ASIM -->
+  <script src="calendario_custom/js/calendar.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Inizializza il calendario dentro l'elemento #calendario_custom
+      AsimCalendar.init({
+        container: '#calendario_custom',
+        apiUrl: 'calendario_custom/api.php',
+        defaultView: 'month'
+      });
+    });
+  </script>
+
+</body>
+</html>
+

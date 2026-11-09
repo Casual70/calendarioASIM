@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario Interventi | ASIM Multiservices</title>
+  <link rel="stylesheet" href="css/calendar.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Contenitore del Calendario ASIM -->
+  <div id="asim-calendar-app"></div>
+
+  <script src="js/calendar.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      window.asimCalendar = AsimCalendar.init({
+        container: '#asim-calendar-app',
+        apiUrl: 'api.php',
+        defaultView: 'month'
+      });
+    });
+  </script>
+</body>
+</html>
+
