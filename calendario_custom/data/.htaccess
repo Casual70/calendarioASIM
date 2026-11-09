@@ -1,0 +1,6 @@
+# Protegge i file JSON e CSV dai download diretti non autorizzati
+<FilesMatch "\.(json|csv)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+

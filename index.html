@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario Interventi | ASIM Multiservices</title>
+  <link rel="stylesheet" href="css/calendar.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      background-color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      transition: padding 0.2s;
+    }
+
+    /* Modalità Embed (quando caricato dentro iframe nel CRM) */
+    body.is-embedded {
+      padding: 0 !important;
+      background-color: transparent !important;
+    }
+    body.is-embedded .asim-cal {
+      margin: 0 !important;
+      max-width: 100% !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Contenitore Principale Calendario ASIM -->
+  <div id="asim-calendar-root"></div>
+
+  <script src="js/calendar.js"></script>
+  <script>
+    // Rileva se la pagina è incorporata dentro un iframe nel CRM
+    if (window.self !== window.top) {
+      document.body.classList.add('is-embedded');
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      window.asimCal = AsimCalendar.init({
+        container: '#asim-calendar-root',
+        defaultCsvUrl: 'sample.csv',
+        storageKey: 'asim_calendar_events_v1',
+        defaultView: 'month'
+      });
+
+      // Notifica altezza al genitore (CRM) per auto-resize se supportato
+      function sendHeight() {
+        if (window.self !== window.top) {
+          const height = document.body.scrollHeight;
+          window.parent.postMessage({ type: 'asim-cal-resize', height: height }, '*');
+        }
+      }
+      window.addEventListener('resize', sendHeight);
+      setTimeout(sendHeight, 500);
+    });
+  </script>
+</body>
+</html>
+
