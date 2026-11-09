@@ -1318,6 +1318,94 @@
 }
 
 /* ----------------------------------------------------
+   PULSANTI AGGIUNTA RAPIDA (+ CELLE E COLONNE)
+   ---------------------------------------------------- */
+.asim-week-col-header {
+  position: relative;
+}
+
+.asim-col-add-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--asim-gray-300);
+  background-color: #ffffff;
+  color: var(--asim-gray-600);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: all 0.15s ease;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.asim-week-col:hover .asim-col-add-btn,
+.asim-list-date-group:hover .asim-col-add-btn,
+.asim-col-add-btn:focus {
+  opacity: 1;
+}
+
+.asim-col-add-btn:hover {
+  background-color: var(--asim-primary);
+  color: #ffffff;
+  border-color: var(--asim-primary);
+  transform: scale(1.15);
+}
+
+.asim-cell-add-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--asim-gray-400);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.asim-day-cell:hover .asim-cell-add-btn {
+  opacity: 1;
+  border-color: var(--asim-gray-300);
+  background-color: #ffffff;
+}
+
+.asim-cell-add-btn:hover {
+  background-color: var(--asim-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--asim-primary) !important;
+  transform: scale(1.2);
+}
+
+.asim-empty-day {
+  cursor: pointer;
+  transition: all 0.15s;
+  border-radius: var(--asim-radius-sm);
+  padding: 24px 8px;
+}
+
+.asim-empty-day:hover {
+  color: var(--asim-primary);
+  background-color: #f0f9ff;
+  border: 1px dashed var(--asim-primary);
+}
+
+/* ----------------------------------------------------
    STILI PER LA STAMPA (@media print)
    ---------------------------------------------------- */
 @media print {
@@ -1357,7 +1445,10 @@
   .asim-dropzone-overlay,
   .asim-toast,
   .asim-btn-copy,
-  .asim-search-box {
+  .asim-search-box,
+  .asim-col-add-btn,
+  .asim-cell-add-btn,
+  .asim-day-add-btn {
     display: none !important;
   }
 

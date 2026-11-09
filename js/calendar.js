@@ -204,9 +204,17 @@
               </div>
             </div>
 
-            <!-- Azioni Rapide (Import, Demo, Stampa) -->
+            <!-- Azioni Rapide (Nuovo Intervento, Import, Demo, Stampa) -->
             <div class="asim-cal-actions">
-              <label class="asim-btn asim-btn-primary" title="Carica file CSV esportato">
+              <button class="asim-btn asim-btn-primary" id="asim-btn-add" title="Aggiungi nuovo intervento">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>+ Nuovo Intervento</span>
+              </button>
+
+              <label class="asim-btn asim-btn-outline" title="Carica file CSV esportato">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="17 8 12 3 7 8"></polyline>
@@ -221,14 +229,6 @@
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span>Carica Demo</span>
-              </button>
-
-              <button class="asim-btn asim-btn-outline" id="asim-btn-add" title="Aggiungi nuovo intervento">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                <span>+ Nuovo</span>
               </button>
 
               <button class="asim-btn asim-btn-icon" id="asim-btn-print" title="Stampa o Salva PDF">
@@ -332,14 +332,17 @@
           <div class="asim-modal-overlay" id="asim-modal" style="display:none;">
             <div class="asim-modal-card">
               <div class="asim-modal-header">
-                <div>
+                <div id="modal-header-badges" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                   <span class="asim-badge asim-badge-code" id="modal-code">C03</span>
                   <span class="asim-badge asim-badge-tech" id="modal-tech">@Goracci</span>
                   <span class="asim-badge asim-badge-priority" id="modal-priority">Priorità 3</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
                   <button class="asim-btn asim-btn-xs asim-btn-outline" id="modal-btn-edit" title="Modifica dettagli intervento">
                     ✏️ Modifica
+                  </button>
+                  <button class="asim-btn asim-btn-xs asim-btn-danger" id="modal-btn-delete-view" title="Elimina definitivamente questo intervento">
+                    🗑️ Elimina
                   </button>
                   <button class="asim-modal-close" id="modal-close">&times;</button>
                 </div>
@@ -678,12 +681,17 @@
 
       // Annulla Modifica
       root.querySelector('#edit-btn-cancel').addEventListener('click', () => {
-        root.querySelector('#modal-edit-mode').style.display = 'none';
-        root.querySelector('#modal-view-mode').style.display = 'block';
-        root.querySelector('#modal-btn-edit').style.display = 'inline-block';
+        if (!this.currentModalEvent) {
+          modal.style.display = 'none';
+        } else {
+          root.querySelector('#modal-edit-mode').style.display = 'none';
+          root.querySelector('#modal-view-mode').style.display = 'block';
+          root.querySelector('#modal-btn-edit').style.display = 'inline-flex';
+          root.querySelector('#modal-btn-delete-view').style.display = 'inline-flex';
+        }
       });
 
-      // Salva Modifiche Form (Salvataggio Permanente)
+      // Salva Modifiche Form (Salvataggio Permanente nel Cloud Turso)
       root.querySelector('#asim-edit-form').addEventListener('submit', (e) => {
         e.preventDefault();
 
@@ -711,6 +719,8 @@
 
           this.events.push(newEv);
           this.saveEventsPermanently(newEv, 'upsert');
+          this.updateFilters();
+          this.renderView();
           this.showToast('Nuovo intervento salvato nel cloud Turso!', 'success');
           this.openModal(newEv);
           return;
@@ -734,21 +744,28 @@
         ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
 
         this.saveEventsPermanently(ev, 'upsert');
+        this.updateFilters();
+        this.renderView();
         this.showToast('Intervento aggiornato nel cloud Turso!', 'success');
         this.openModal(ev);
       });
 
-      // Elimina Intervento
-      root.querySelector('#edit-btn-delete').addEventListener('click', () => {
+      // Elimina Intervento (gestore comune per vista ed edit)
+      const handleDeleteEvent = () => {
         if (!this.currentModalEvent) return;
         const targetEv = this.currentModalEvent;
-        if (confirm(`Sei sicuro di voler eliminare l'intervento di "${targetEv.clientName}"?`)) {
+        if (confirm(`Sei sicuro di voler eliminare definitivamente l'intervento di "${targetEv.clientName}"?`)) {
           this.events = this.events.filter(x => x.id !== targetEv.id);
           this.saveEventsPermanently(targetEv, 'delete');
           modal.style.display = 'none';
-          this.showToast('Intervento eliminato.', 'info');
+          this.updateFilters();
+          this.renderView();
+          this.showToast('Intervento eliminato dal database.', 'info');
         }
-      });
+      };
+
+      root.querySelector('#edit-btn-delete').addEventListener('click', handleDeleteEvent);
+      root.querySelector('#modal-btn-delete-view').addEventListener('click', handleDeleteEvent);
 
       // Pulsanti Copia PDR/Matricola
       root.querySelectorAll('.asim-btn-copy').forEach(btn => {
@@ -1621,7 +1638,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           <div class="asim-day-cell ${isToday ? 'is-today' : ''}" data-date="${currentIso}">
             <div class="asim-day-top">
               <span class="asim-day-number">${day}</span>
-              ${dayEvents.length > 0 ? `<span class="asim-day-badge">${dayEvents.length}</span>` : ''}
+              <div style="display:flex; align-items:center; gap:4px;">
+                ${dayEvents.length > 0 ? `<span class="asim-day-badge">${dayEvents.length}</span>` : ''}
+                <button class="asim-cell-add-btn" data-date="${currentIso}" title="Aggiungi intervento per il ${day}">+</button>
+              </div>
             </div>
             <div class="asim-day-events">
         `;
@@ -1713,6 +1733,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               const timeParts = ev.time.split(':');
               ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
               this.saveEventsPermanently(ev, 'upsert');
+              this.renderView();
               this.showToast(`Intervento di ${ev.clientName} spostato al ${targetDate}!`, 'success');
             }
           }
@@ -1729,6 +1750,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             });
             this.renderView();
           }
+        });
+      });
+
+      // Aggiungi intervento da cella mese (+)
+      container.querySelectorAll('.asim-cell-add-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openCreateMode(btn.dataset.date);
         });
       });
     }
@@ -1768,12 +1797,13 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div class="asim-week-col-header">
               <span class="asim-week-day-name">${dayNames[i]}</span>
               <span class="asim-week-day-num">${d.getDate()}</span>
+              <button class="asim-col-add-btn" data-date="${iso}" title="Aggiungi intervento per ${dayNames[i]} ${d.getDate()}">+</button>
             </div>
             <div class="asim-week-col-body">
         `;
 
         if (dayEvents.length === 0) {
-          html += `<div class="asim-empty-day">Nessun intervento</div>`;
+          html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
           dayEvents.forEach(ev => {
             const colors = this.getTechColor(ev.technician);
@@ -1844,9 +1874,25 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               const timeParts = ev.time.split(':');
               ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
               this.saveEventsPermanently(ev, 'upsert');
+              this.renderView();
               this.showToast(`Intervento di ${ev.clientName} spostato al ${targetDate}!`, 'success');
             }
           }
+        });
+      });
+
+      // Aggiungi intervento da colonna settimana (+)
+      container.querySelectorAll('.asim-col-add-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openCreateMode(btn.dataset.date);
+        });
+      });
+
+      // Clic su "Nessun intervento" per aggiungere rapidamente
+      container.querySelectorAll('.asim-empty-day').forEach(emptyEl => {
+        emptyEl.addEventListener('click', () => {
+          this.openCreateMode(emptyEl.dataset.date);
         });
       });
     }
@@ -1871,8 +1917,11 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       let html = `
         <div class="asim-day-view-container">
-          <div class="asim-day-header-summary">
-            <h3>Interventi in programma per oggi (${dayEvents.length})</h3>
+          <div class="asim-day-header-summary" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <h3 style="margin:0;">Interventi in programma per oggi (${dayEvents.length})</h3>
+            <button class="asim-btn asim-btn-sm asim-btn-primary asim-day-add-btn" data-date="${iso}">
+              ➕ Nuovo Intervento
+            </button>
           </div>
       `;
 
@@ -1885,6 +1934,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <line x1="12" y1="16" x2="12.01" y2="16"></line>
             </svg>
             <p>Nessun intervento programmato per questa giornata.</p>
+            <button class="asim-btn asim-btn-sm asim-btn-primary asim-day-add-btn" data-date="${iso}" style="margin-top:10px;">
+              ➕ Aggiungi Intervento per Oggi
+            </button>
           </div>
         `;
       } else {
@@ -1924,6 +1976,13 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         item.addEventListener('click', () => {
           const ev = this.events.find(x => x.id === item.dataset.id);
           if (ev) this.openModal(ev);
+        });
+      });
+
+      // Aggiungi intervento da vista giorno (+)
+      container.querySelectorAll('.asim-day-add-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.openCreateMode(btn.dataset.date);
         });
       });
     }
@@ -1971,7 +2030,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
         html += `
           <div class="asim-list-date-group">
-            <h4 class="asim-list-date-title">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h4 class="asim-list-date-title" style="margin:0;">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
+              <button class="asim-col-add-btn" data-date="${dateStr}" title="Aggiungi intervento per questo giorno">+</button>
+            </div>
             <div class="asim-list-cards">
         `;
 
@@ -2017,9 +2079,72 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           if (ev) this.openModal(ev);
         });
       });
+
+      // Aggiungi intervento da gruppo data elenco (+)
+      container.querySelectorAll('.asim-col-add-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openCreateMode(btn.dataset.date);
+        });
+      });
     }
 
-    // Apre la modale di dettaglio intervento
+    // Apre la modale in modalità CREAZIONE nuovo intervento
+    openCreateMode(defaultDate = null) {
+      this.currentModalEvent = null;
+      const root = this.container;
+      const modal = root.querySelector('#asim-modal');
+      const viewMode = root.querySelector('#modal-view-mode');
+      const editMode = root.querySelector('#modal-edit-mode');
+      const btnEdit = root.querySelector('#modal-btn-edit');
+      const btnDeleteView = root.querySelector('#modal-btn-delete-view');
+      const btnDelete = root.querySelector('#edit-btn-delete');
+      const headerBadges = root.querySelector('#modal-header-badges');
+
+      if (viewMode) viewMode.style.display = 'none';
+      if (editMode) editMode.style.display = 'block';
+      if (btnEdit) btnEdit.style.display = 'none';
+      if (btnDeleteView) btnDeleteView.style.display = 'none';
+      if (btnDelete) btnDelete.style.display = 'none';
+      if (headerBadges) headerBadges.style.display = 'none';
+
+      const editTitle = editMode.querySelector('h3');
+      if (editTitle) editTitle.innerHTML = '➕ Nuovo Intervento';
+
+      const saveBtn = root.querySelector('#edit-btn-save');
+      if (saveBtn) saveBtn.innerHTML = '💾 Salva Intervento';
+
+      // Precompila o svuota i campi
+      root.querySelector('#edit-client').value = '';
+      root.querySelector('#edit-date').value = defaultDate || this.formatISODate(this.selectedDate);
+      root.querySelector('#edit-time').value = '09:30';
+      root.querySelector('#edit-tech').value = (this.activeTechnician && this.activeTechnician !== 'all') ? this.activeTechnician : '';
+      root.querySelector('#edit-code').value = (this.activeJobCode && this.activeJobCode !== 'all') ? this.activeJobCode : 'A01';
+      root.querySelector('#edit-address').value = '';
+      root.querySelector('#edit-phone').value = '';
+      root.querySelector('#edit-priority').value = '2';
+      root.querySelector('#edit-pdr').value = '';
+      root.querySelector('#edit-matricola').value = '';
+      root.querySelector('#edit-notes').value = '';
+
+      const datalist = root.querySelector('#edit-tech-datalist');
+      if (datalist) {
+        datalist.innerHTML = '';
+        Array.from(this.technicians).forEach(tech => {
+          const opt = document.createElement('option');
+          opt.value = tech;
+          datalist.appendChild(opt);
+        });
+      }
+
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        const clientInput = root.querySelector('#edit-client');
+        if (clientInput) clientInput.focus();
+      }, 50);
+    }
+
+    // Apre la modale di dettaglio intervento (Sola Lettura con tasti Modifica ed Elimina)
     openModal(ev) {
       this.currentModalEvent = ev;
       const modal = this.container.querySelector('#asim-modal');
@@ -2029,9 +2154,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const viewMode = this.container.querySelector('#modal-view-mode');
       const editMode = this.container.querySelector('#modal-edit-mode');
       const btnEdit = this.container.querySelector('#modal-btn-edit');
+      const btnDeleteView = this.container.querySelector('#modal-btn-delete-view');
+      const headerBadges = this.container.querySelector('#modal-header-badges');
+
       if (viewMode) viewMode.style.display = 'block';
       if (editMode) editMode.style.display = 'none';
-      if (btnEdit) btnEdit.style.display = 'inline-block';
+      if (btnEdit) btnEdit.style.display = 'inline-flex';
+      if (btnDeleteView) btnDeleteView.style.display = 'inline-flex';
+      if (headerBadges) headerBadges.style.display = 'flex';
 
       // Titolo e Badge
       this.container.querySelector('#modal-title').textContent = ev.clientName;
@@ -2108,15 +2238,28 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       modal.style.display = 'flex';
     }
 
-    // Passa alla modalità modifica
+    // Passa alla modalità modifica di un intervento esistente
     openEditMode(ev) {
       const root = this.container;
       const viewMode = root.querySelector('#modal-view-mode');
       const editMode = root.querySelector('#modal-edit-mode');
       const btnEdit = root.querySelector('#modal-btn-edit');
+      const btnDeleteView = root.querySelector('#modal-btn-delete-view');
+      const btnDelete = root.querySelector('#edit-btn-delete');
+      const headerBadges = root.querySelector('#modal-header-badges');
+
       if (viewMode) viewMode.style.display = 'none';
       if (editMode) editMode.style.display = 'block';
       if (btnEdit) btnEdit.style.display = 'none';
+      if (btnDeleteView) btnDeleteView.style.display = 'none';
+      if (btnDelete) btnDelete.style.display = 'inline-flex';
+      if (headerBadges) headerBadges.style.display = 'flex';
+
+      const editTitle = editMode.querySelector('h3');
+      if (editTitle) editTitle.innerHTML = '✏️ Modifica Intervento';
+
+      const saveBtn = root.querySelector('#edit-btn-save');
+      if (saveBtn) saveBtn.innerHTML = '💾 Salva Modifiche';
 
       root.querySelector('#edit-client').value = ev.clientName || '';
       root.querySelector('#edit-date').value = ev.date || '';
