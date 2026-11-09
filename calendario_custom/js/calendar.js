@@ -25,6 +25,104 @@
     { bg: '#fefce8', text: '#a16207', border: '#fef08a' }, // Amber
   ];
 
+  // Client HTTP per Turso libSQL Database
+  class TursoClient {
+    constructor(url, token) {
+      if (url && url.startsWith('libsql://')) {
+        this.url = 'https://' + url.substring(9).replace(/\/$/, '') + '/v2/pipeline';
+      } else if (url) {
+        this.url = url.replace(/\/$/, '') + (url.includes('/v2/pipeline') ? '' : '/v2/pipeline');
+      } else {
+        this.url = '';
+      }
+      this.token = token || '';
+    }
+
+    isConfigured() {
+      return Boolean(this.url && this.token);
+    }
+
+    async execute(sql, args = []) {
+      const formattedArgs = args.map(arg => {
+        if (arg === null || arg === undefined) return { type: 'null' };
+        if (typeof arg === 'number') return { type: 'integer', value: String(arg) };
+        return { type: 'text', value: String(arg) };
+      });
+
+      const body = {
+        requests: [
+          {
+            type: 'execute',
+            stmt: {
+              sql: sql,
+              args: formattedArgs
+            }
+          },
+          { type: 'close' }
+        ]
+      };
+
+      const resp = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Turso HTTP ${resp.status}: ${errText}`);
+      }
+
+      const data = await resp.json();
+      if (data.results && data.results[0] && data.results[0].response && data.results[0].response.result) {
+        const res = data.results[0].response.result;
+        const cols = (res.cols || []).map(c => c.name);
+        const rows = (res.rows || []).map(row => {
+          const obj = {};
+          row.forEach((cell, i) => {
+            obj[cols[i]] = cell && cell.value !== undefined ? cell.value : null;
+          });
+          return obj;
+        });
+        return { rows, affected: res.affected_row_count || 0 };
+      }
+      return { rows: [], affected: 0 };
+    }
+
+    async executeBatch(statements) {
+      const requests = statements.map(st => ({
+        type: 'execute',
+        stmt: {
+          sql: st.sql,
+          args: (st.args || []).map(arg => {
+            if (arg === null || arg === undefined) return { type: 'null' };
+            if (typeof arg === 'number') return { type: 'integer', value: String(arg) };
+            return { type: 'text', value: String(arg) };
+          })
+        }
+      }));
+      requests.push({ type: 'close' });
+
+      const resp = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests })
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Turso Batch HTTP ${resp.status}: ${errText}`);
+      }
+      return await resp.json();
+    }
+  }
+
   class CalendarInstance {
     constructor(options = {}) {
       this.container = typeof options.container === 'string'
@@ -36,7 +134,17 @@
         return;
       }
 
+      // Configurazione Turso DB Edge
+      const defaultTursoUrl = 'https://calendario-casual70.aws-eu-west-1.turso.io';
+      const defaultTursoToken = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTQyMzc2MDUsImlkIjoiMDFhMWMwZTUtMDkwMS03MzA1LTkyOGUtMzkzM2I0ZjMwMmE2Iiwia2lkIjoiMHlac2dnNndSaDZpdENXakpyNWJ3MHZpWlNSb1lIQzBzY0JESzZpbFhvZyIsInJpZCI6ImJhNGI4Y2ZmLTQ3YTYtNDViNS04NzBkLTg3YTA3OWNlZWYxNCJ9.aZIaEC5u5apP087dGt5kcRZjmrbfezIltsy0ZphIf24p8yaAQmfCKPBcRq9gVN7MhnVJJuEPYaCVGYeuT4VzAw';
+
+      this.turso = new TursoClient(
+        options.tursoUrl || localStorage.getItem('asim_turso_url') || defaultTursoUrl,
+        options.tursoToken || localStorage.getItem('asim_turso_token') || defaultTursoToken
+      );
+
       this.apiUrl = options.apiUrl || 'api.php';
+      this.defaultCsvUrl = options.defaultCsvUrl || 'sample.csv';
       this.storageKey = options.storageKey || 'asim_calendar_events_v1';
       this.events = [];
       this.currentView = options.defaultView || 'month'; // 'month', 'week', 'day', 'list'
@@ -48,6 +156,7 @@
       this.technicians = new Set();
       this.jobCodes = new Set();
       this.techColorMap = new Map();
+      this._lastTursoSignature = '';
 
       this.init();
     }
@@ -62,6 +171,18 @@
     renderSkeleton() {
       this.container.innerHTML = `
         <div class="asim-cal">
+          <!-- Intestazione esclusiva per la STAMPA -->
+          <div class="asim-print-header">
+            <div class="asim-print-brand">
+              <h2 class="asim-print-company">ASIM Multiservices SRL</h2>
+              <span class="asim-print-tagline">Pianificazione e Gestione Interventi Tecnici</span>
+            </div>
+            <div class="asim-print-meta">
+              <div class="asim-print-view-title" id="asim-print-view-title">Settimana</div>
+              <div class="asim-print-filter-info" id="asim-print-filter-info">Tutti gli interventi</div>
+            </div>
+          </div>
+
           <!-- Top Toolbar -->
           <div class="asim-cal-toolbar">
             <div class="asim-cal-branding">
@@ -76,6 +197,10 @@
               <div>
                 <h2 class="asim-cal-title">Calendario Interventi</h2>
                 <span class="asim-cal-subtitle">ASIM Multiservices</span>
+              </div>
+              <div class="asim-badge-turso" id="asim-turso-badge" title="Database Turso SQLite Cloud sincronizzato in tempo reale">
+                <span class="asim-dot-live"></span>
+                <span id="asim-turso-text">Turso Cloud Live</span>
               </div>
             </div>
 
@@ -96,6 +221,14 @@
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
                 <span>Carica Demo</span>
+              </button>
+
+              <button class="asim-btn asim-btn-outline" id="asim-btn-add" title="Aggiungi nuovo intervento">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>+ Nuovo</span>
               </button>
 
               <button class="asim-btn asim-btn-icon" id="asim-btn-print" title="Stampa o Salva PDF">
@@ -195,7 +328,7 @@
             </div>
           </div>
 
-          <!-- Modale Dettaglio Intervento -->
+          <!-- Modale Dettaglio Intervento & Modifica -->
           <div class="asim-modal-overlay" id="asim-modal" style="display:none;">
             <div class="asim-modal-card">
               <div class="asim-modal-header">
@@ -204,100 +337,190 @@
                   <span class="asim-badge asim-badge-tech" id="modal-tech">@Goracci</span>
                   <span class="asim-badge asim-badge-priority" id="modal-priority">Priorità 3</span>
                 </div>
-                <button class="asim-modal-close" id="modal-close">&times;</button>
-              </div>
-
-              <h2 class="asim-modal-title" id="modal-title">NOME CLIENTE</h2>
-              <div class="asim-modal-datetime" id="modal-datetime">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span id="modal-date-text">Lunedì 9 Novembre 2026 alle 09:30</span>
-              </div>
-
-              <div class="asim-modal-body">
-                <!-- Indirizzo -->
-                <div class="asim-detail-row" id="modal-addr-row">
-                  <div class="asim-detail-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                      <circle cx="12" cy="10" r="3"></circle>
-                    </svg>
-                  </div>
-                  <div class="asim-detail-content">
-                    <label>Indirizzo</label>
-                    <div class="asim-detail-value" id="modal-address">-</div>
-                    <a href="#" target="_blank" class="asim-btn asim-btn-xs asim-btn-maps" id="modal-maps-link">
-                      <span>📍 Apri in Google Maps</span>
-                    </a>
-                  </div>
-                </div>
-
-                <!-- Telefono -->
-                <div class="asim-detail-row" id="modal-tel-row">
-                  <div class="asim-detail-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                    </svg>
-                  </div>
-                  <div class="asim-detail-content">
-                    <label>Telefono</label>
-                    <div class="asim-detail-value" id="modal-phone">-</div>
-                    <a href="#" class="asim-btn asim-btn-xs asim-btn-call" id="modal-phone-link">
-                      <span>📞 Chiama Cliente</span>
-                    </a>
-                  </div>
-                </div>
-
-                <!-- Dati Tecnici: PDR e Matricola -->
-                <div class="asim-detail-grid">
-                  <div class="asim-detail-card">
-                    <label>PDR</label>
-                    <div class="asim-code-box">
-                      <code id="modal-pdr">-</code>
-                      <button class="asim-btn-copy" data-target="modal-pdr" title="Copia PDR">📋</button>
-                    </div>
-                  </div>
-                  <div class="asim-detail-card">
-                    <label>Matricola</label>
-                    <div class="asim-code-box">
-                      <code id="modal-matricola">-</code>
-                      <button class="asim-btn-copy" data-target="modal-matricola" title="Copia Matricola">📋</button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Note -->
-                <div class="asim-detail-row" id="modal-notes-row">
-                  <div class="asim-detail-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                      <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                  </div>
-                  <div class="asim-detail-content">
-                    <label>Note / Dettagli</label>
-                    <div class="asim-notes-box" id="modal-notes">Nessuna nota aggiuntiva</div>
-                  </div>
-                </div>
-
-                <!-- Assegnazione / Autore -->
-                <div class="asim-modal-meta">
-                  <span>Assegnato da: <strong id="modal-author">-</strong></span>
-                  <span id="modal-raw-date"></span>
-                </div>
-
-                <!-- Naviga a questa data nel calendario -->
-                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
-                  <button class="asim-btn asim-btn-sm asim-btn-outline" id="modal-goto-date">
-                    📅 Visualizza questo giorno nel calendario
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button class="asim-btn asim-btn-xs asim-btn-outline" id="modal-btn-edit" title="Modifica dettagli intervento">
+                    ✏️ Modifica
                   </button>
+                  <button class="asim-modal-close" id="modal-close">&times;</button>
                 </div>
               </div>
+
+              <!-- CONTENITORE VISTA (Sola Lettura) -->
+              <div id="modal-view-mode">
+                <h2 class="asim-modal-title" id="modal-title">NOME CLIENTE</h2>
+                <div class="asim-modal-datetime" id="modal-datetime">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span id="modal-date-text">Lunedì 9 Novembre 2026 alle 09:30</span>
+                </div>
+
+                <div class="asim-modal-body">
+                  <!-- Indirizzo -->
+                  <div class="asim-detail-row" id="modal-addr-row">
+                    <div class="asim-detail-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                      </svg>
+                    </div>
+                    <div class="asim-detail-content">
+                      <label>Indirizzo</label>
+                      <div class="asim-detail-value" id="modal-address">-</div>
+                      <a href="#" target="_blank" class="asim-btn asim-btn-xs asim-btn-maps" id="modal-maps-link">
+                        <span>📍 Apri in Google Maps</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <!-- Telefono -->
+                  <div class="asim-detail-row" id="modal-tel-row">
+                    <div class="asim-detail-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                    </div>
+                    <div class="asim-detail-content">
+                      <label>Telefono</label>
+                      <div class="asim-detail-value" id="modal-phone">-</div>
+                      <a href="#" class="asim-btn asim-btn-xs asim-btn-call" id="modal-phone-link">
+                        <span>📞 Chiama Cliente</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <!-- Dati Tecnici: PDR e Matricola -->
+                  <div class="asim-detail-grid">
+                    <div class="asim-detail-card">
+                      <label>PDR</label>
+                      <div class="asim-code-box">
+                        <code id="modal-pdr">-</code>
+                        <button class="asim-btn-copy" data-target="modal-pdr" title="Copia PDR">📋</button>
+                      </div>
+                    </div>
+                    <div class="asim-detail-card">
+                      <label>Matricola</label>
+                      <div class="asim-code-box">
+                        <code id="modal-matricola">-</code>
+                        <button class="asim-btn-copy" data-target="modal-matricola" title="Copia Matricola">📋</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Note -->
+                  <div class="asim-detail-row" id="modal-notes-row">
+                    <div class="asim-detail-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="asim-detail-content">
+                      <label>Note / Dettagli</label>
+                      <div class="asim-notes-box" id="modal-notes">Nessuna nota aggiuntiva</div>
+                    </div>
+                  </div>
+
+                  <!-- Assegnazione / Autore -->
+                  <div class="asim-modal-meta">
+                    <span>Assegnato da: <strong id="modal-author">-</strong></span>
+                    <span id="modal-raw-date"></span>
+                  </div>
+
+                  <!-- Naviga a questa data nel calendario -->
+                  <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                    <button class="asim-btn asim-btn-sm asim-btn-outline" id="modal-goto-date">
+                      📅 Visualizza questo giorno nel calendario
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- CONTENITORE MODIFICA (Form Editabile) -->
+              <div id="modal-edit-mode" style="display:none;">
+                <h3 style="margin: 0 0 16px 0; font-size: 1.15rem; color: var(--asim-gray-900);">✏️ Modifica Intervento</h3>
+                <form id="asim-edit-form" class="asim-form-grid">
+                  <div class="asim-form-group full-width">
+                    <label>Cliente / Titolo *</label>
+                    <input type="text" id="edit-client" class="asim-form-input" required>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Data Intervento *</label>
+                    <input type="date" id="edit-date" class="asim-form-input" required>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Orario *</label>
+                    <input type="time" id="edit-time" class="asim-form-input" required>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Tecnico Assegnato</label>
+                    <input type="text" id="edit-tech" class="asim-form-input" list="edit-tech-datalist" placeholder="es. Goracci">
+                    <datalist id="edit-tech-datalist"></datalist>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Codice Intervento</label>
+                    <input type="text" id="edit-code" class="asim-form-input" placeholder="es. C03, A01, D01">
+                  </div>
+
+                  <div class="asim-form-group full-width">
+                    <label>Indirizzo Completo</label>
+                    <input type="text" id="edit-address" class="asim-form-input" placeholder="Via, Piazza, Civico, Città">
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Telefono</label>
+                    <input type="text" id="edit-phone" class="asim-form-input" placeholder="es. 3405050301">
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Priorità</label>
+                    <select id="edit-priority" class="asim-form-input">
+                      <option value="1">1 - Bassa</option>
+                      <option value="2">2 - Normale</option>
+                      <option value="3">3 - Media</option>
+                      <option value="4">4 - Alta / Urgente</option>
+                    </select>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>PDR</label>
+                    <input type="text" id="edit-pdr" class="asim-form-input" placeholder="es. 11714040220001">
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Matricola</label>
+                    <input type="text" id="edit-matricola" class="asim-form-input" placeholder="es. 5238698">
+                  </div>
+
+                  <div class="asim-form-group full-width">
+                    <label>Note e Dettagli</label>
+                    <textarea id="edit-notes" class="asim-form-input" rows="3" placeholder="Eventuali note..."></textarea>
+                  </div>
+
+                  <div class="asim-form-actions full-width">
+                    <button type="button" class="asim-btn asim-btn-danger" id="edit-btn-delete">
+                      🗑️ Elimina
+                    </button>
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" class="asim-btn asim-btn-outline" id="edit-btn-cancel">
+                        Annulla
+                      </button>
+                      <button type="submit" class="asim-btn asim-btn-primary" id="edit-btn-save">
+                        💾 Salva Modifiche
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
             </div>
           </div>
 
@@ -322,6 +545,11 @@
       // Bottone Demo
       root.querySelector('#asim-btn-demo').addEventListener('click', () => {
         this.loadSampleData();
+      });
+
+      // Bottone Nuovo Intervento
+      root.querySelector('#asim-btn-add').addEventListener('click', () => {
+        this.openCreateMode();
       });
 
       // Bottone Stampa
@@ -442,6 +670,86 @@
         }
       });
 
+      // Switch a modalità Modifica
+      root.querySelector('#modal-btn-edit').addEventListener('click', () => {
+        if (!this.currentModalEvent) return;
+        this.openEditMode(this.currentModalEvent);
+      });
+
+      // Annulla Modifica
+      root.querySelector('#edit-btn-cancel').addEventListener('click', () => {
+        root.querySelector('#modal-edit-mode').style.display = 'none';
+        root.querySelector('#modal-view-mode').style.display = 'block';
+        root.querySelector('#modal-btn-edit').style.display = 'inline-block';
+      });
+
+      // Salva Modifiche Form (Salvataggio Permanente)
+      root.querySelector('#asim-edit-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        if (!this.currentModalEvent) {
+          // Creazione Nuovo Intervento
+          const newEv = {
+            id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            clientName: root.querySelector('#edit-client').value.trim(),
+            date: root.querySelector('#edit-date').value,
+            time: root.querySelector('#edit-time').value,
+            technician: root.querySelector('#edit-tech').value.trim() || 'Non assegnato',
+            jobCode: root.querySelector('#edit-code').value.trim() || 'Altro',
+            indirizzo: root.querySelector('#edit-address').value.trim(),
+            telefono: root.querySelector('#edit-phone').value.trim(),
+            priority: parseInt(root.querySelector('#edit-priority').value, 10) || 1,
+            pdr: root.querySelector('#edit-pdr').value.trim(),
+            matricola: root.querySelector('#edit-matricola').value.trim(),
+            note: root.querySelector('#edit-notes').value.trim(),
+            author: 'Operatore CRM',
+            rawDate: ''
+          };
+          const dateParts = newEv.date.split('-');
+          const timeParts = newEv.time.split(':');
+          newEv.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+
+          this.events.push(newEv);
+          this.saveEventsPermanently(newEv, 'upsert');
+          this.showToast('Nuovo intervento salvato nel cloud Turso!', 'success');
+          this.openModal(newEv);
+          return;
+        }
+
+        const ev = this.currentModalEvent;
+        ev.clientName = root.querySelector('#edit-client').value.trim();
+        ev.date = root.querySelector('#edit-date').value;
+        ev.time = root.querySelector('#edit-time').value;
+        ev.technician = root.querySelector('#edit-tech').value.trim() || 'Non assegnato';
+        ev.jobCode = root.querySelector('#edit-code').value.trim() || 'Altro';
+        ev.indirizzo = root.querySelector('#edit-address').value.trim();
+        ev.telefono = root.querySelector('#edit-phone').value.trim();
+        ev.priority = parseInt(root.querySelector('#edit-priority').value, 10) || 1;
+        ev.pdr = root.querySelector('#edit-pdr').value.trim();
+        ev.matricola = root.querySelector('#edit-matricola').value.trim();
+        ev.note = root.querySelector('#edit-notes').value.trim();
+
+        const dateParts = ev.date.split('-');
+        const timeParts = ev.time.split(':');
+        ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+
+        this.saveEventsPermanently(ev, 'upsert');
+        this.showToast('Intervento aggiornato nel cloud Turso!', 'success');
+        this.openModal(ev);
+      });
+
+      // Elimina Intervento
+      root.querySelector('#edit-btn-delete').addEventListener('click', () => {
+        if (!this.currentModalEvent) return;
+        const targetEv = this.currentModalEvent;
+        if (confirm(`Sei sicuro di voler eliminare l'intervento di "${targetEv.clientName}"?`)) {
+          this.events = this.events.filter(x => x.id !== targetEv.id);
+          this.saveEventsPermanently(targetEv, 'delete');
+          modal.style.display = 'none';
+          this.showToast('Intervento eliminato.', 'info');
+        }
+      });
+
       // Pulsanti Copia PDR/Matricola
       root.querySelectorAll('.asim-btn-copy').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -458,38 +766,75 @@
       });
     }
 
-    // Carica dati iniziali da API o LocalStorage
+    // Carica dati iniziali da Turso DB (o fallback locale)
     async loadInitialData() {
-      // 1. Prova da backend API PHP
+      // 1. Prova da Turso Cloud Database
+      if (this.turso.isConfigured()) {
+        this.updateTursoBadge('syncing');
+        try {
+          const res = await this.turso.execute('SELECT * FROM appointments ORDER BY date ASC, time ASC;');
+          if (res.rows && res.rows.length > 0) {
+            this.events = this.mapTursoRowsToEvents(res.rows);
+            try { localStorage.setItem(this.storageKey, JSON.stringify(this.events)); } catch (e) {}
+            this.updateTursoBadge('online');
+            this.updateFilters();
+            this.renderView();
+            this.startTursoPolling();
+            return;
+          }
+        } catch (err) {
+          console.warn('[AsimCalendar] Connessione Turso DB fallita:', err);
+          this.updateTursoBadge('error');
+        }
+      }
+
+      // 2. Prova da backend API PHP
       try {
         const response = await fetch(this.apiUrl + '?action=get', { cache: 'no-store' });
         if (response.ok) {
           const data = await response.json();
           if (data && data.status === 'ok' && Array.isArray(data.events) && data.events.length > 0) {
             this.setEvents(data.events);
+            this.startTursoPolling();
             return;
           }
         }
-      } catch (err) {
-        // Nessun server API attivo, usa localStorage
-      }
+      } catch (err) {}
 
-      // 2. Prova da LocalStorage
+      // 3. Prova da LocalStorage
       const stored = localStorage.getItem(this.storageKey);
       if (stored) {
         try {
           const events = JSON.parse(stored);
           if (Array.isArray(events) && events.length > 0) {
-            this.setEvents(events);
+            this.events = events;
+            this.updateFilters();
+            this.renderView();
+            this.startTursoPolling();
             return;
           }
-        } catch (e) {
-          console.warn('Errore lettura da localStorage', e);
-        }
+        } catch (e) {}
       }
 
-      // 3. Fallback: mostra stato vuoto pronto
+      // 4. Fallback per GitHub Pages o primo avvio: carica file CSV di default (sample.csv)
+      try {
+        const sampleResp = await fetch(this.defaultCsvUrl, { cache: 'no-cache' });
+        if (sampleResp.ok) {
+          const csvText = await sampleResp.text();
+          if (csvText && csvText.includes('task,')) {
+            const parsed = this.parseCSV(csvText);
+            if (parsed && parsed.length > 0) {
+              this.setEvents(parsed);
+              this.batchImportToTurso(parsed);
+              this.startTursoPolling();
+              return;
+            }
+          }
+        }
+      } catch (e) {}
+
       this.renderView();
+      this.startTursoPolling();
     }
 
     // Gestione caricamento file CSV
@@ -511,6 +856,11 @@
 
         this.setEvents(parsedEvents);
 
+        // Salva in batch su Turso DB
+        if (this.turso.isConfigured()) {
+          await this.batchImportToTurso(parsedEvents);
+        }
+
         // Prova a sincronizzare su server PHP se presente
         try {
           const formData = new FormData();
@@ -519,11 +869,9 @@
             method: 'POST',
             body: formData
           });
-        } catch (err) {
-          // Salvataggio server opzionale, i dati sono già in memoria e localStorage
-        }
+        } catch (err) {}
 
-        this.showToast(`Importati con successo ${parsedEvents.length} interventi!`, 'success');
+        this.showToast(`Importati ${parsedEvents.length} interventi su Turso DB!`, 'success');
       };
       reader.readAsText(file, 'UTF-8');
     }
@@ -554,27 +902,211 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       const events = this.parseCSV(sampleCSV);
       this.setEvents(events);
+      if (this.turso.isConfigured()) {
+        this.batchImportToTurso(events);
+      }
     }
 
     // Salva e aggiorna gli eventi correnti
     setEvents(events) {
       this.events = events;
-      localStorage.setItem(this.storageKey, JSON.stringify(events));
+      this.saveEventsPermanently();
+    }
+
+    // Salva gli eventi sia in LocalStorage che su Turso DB (Permanente e Multi-Utente)
+    async saveEventsPermanently(modifiedEvent = null, actionType = 'upsert') {
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.events));
+      } catch (e) {
+        console.warn('Errore salvataggio localStorage', e);
+      }
+
+      // Salva su Turso DB Cloud
+      if (this.turso.isConfigured()) {
+        this.updateTursoBadge('syncing');
+        try {
+          if (actionType === 'delete' && modifiedEvent) {
+            await this.turso.execute('DELETE FROM appointments WHERE id = ?;', [modifiedEvent.id]);
+          } else if (modifiedEvent) {
+            const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+            await this.turso.execute(sql, [
+              modifiedEvent.id,
+              modifiedEvent.clientName,
+              modifiedEvent.jobCode || 'Altro',
+              modifiedEvent.technician || 'Non assegnato',
+              modifiedEvent.date,
+              modifiedEvent.time,
+              modifiedEvent.priority || 2,
+              modifiedEvent.pdr || '',
+              modifiedEvent.matricola || '',
+              modifiedEvent.indirizzo || '',
+              modifiedEvent.telefono || '',
+              modifiedEvent.note || '',
+              modifiedEvent.author || 'Operatore'
+            ]);
+          } else {
+            await this.batchImportToTurso(this.events);
+          }
+          this.updateTursoBadge('online');
+        } catch (err) {
+          console.error('[Turso Save Error]', err);
+          this.updateTursoBadge('error');
+        }
+      }
+
+      // Se API PHP disponibile, sincronizza su server
+      try {
+        fetch(this.apiUrl + '?action=save_events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: this.events })
+        }).catch(() => {});
+      } catch (e) {}
+
       this.updateFilters();
       this.renderView();
     }
 
-    // Svuota tutti i dati
-    clearData() {
+    // Inserisce array di eventi in batch su Turso
+    async batchImportToTurso(events) {
+      if (!this.turso.isConfigured() || !events || events.length === 0) return;
+      try {
+        const statements = events.map(ev => ({
+          sql: `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`,
+          args: [
+            ev.id,
+            ev.clientName,
+            ev.jobCode || 'Altro',
+            ev.technician || 'Non assegnato',
+            ev.date,
+            ev.time,
+            ev.priority || 2,
+            ev.pdr || '',
+            ev.matricola || '',
+            ev.indirizzo || '',
+            ev.telefono || '',
+            ev.note || '',
+            ev.author || 'Operatore'
+          ]
+        }));
+        await this.turso.executeBatch(statements);
+        this.updateTursoBadge('online');
+      } catch (err) {
+        console.error('[Turso Batch Import Error]', err);
+      }
+    }
+
+    // Mappa le righe grezze di Turso in oggetti evento dell'interfaccia
+    mapTursoRowsToEvents(rows) {
+      return rows.map(r => {
+        const dateParts = (r.date || '').split('-');
+        const timeParts = (r.time || '09:00').split(':');
+        const dt = new Date(
+          parseInt(dateParts[0] || 2026),
+          parseInt(dateParts[1] || 1) - 1,
+          parseInt(dateParts[2] || 1),
+          parseInt(timeParts[0] || 9),
+          parseInt(timeParts[1] || 0)
+        );
+        return {
+          id: r.id,
+          clientName: r.client_name,
+          jobCode: r.job_code || 'Altro',
+          technician: r.technician || 'Non assegnato',
+          priority: parseInt(r.priority, 10) || 1,
+          author: r.author || 'Sistema',
+          date: r.date,
+          time: r.time,
+          dateTime: dt,
+          hasSpecificTime: Boolean(r.time),
+          pdr: r.pdr || '',
+          matricola: r.matricola || '',
+          indirizzo: r.indirizzo || '',
+          telefono: r.telefono || '',
+          note: r.note || '',
+          updatedAt: r.updated_at
+        };
+      });
+    }
+
+    // Polling in tempo reale (ogni 15 secondi controlla se ci sono modifiche da altri browser)
+    startTursoPolling() {
+      if (this._tursoInterval) clearInterval(this._tursoInterval);
+      if (!this.turso.isConfigured()) return;
+
+      this._tursoInterval = setInterval(async () => {
+        const editMode = this.container.querySelector('#modal-edit-mode');
+        if (editMode && editMode.style.display !== 'none') return; // Non interrompere se sta modificando
+
+        try {
+          const res = await this.turso.execute('SELECT count(*) as count, max(updated_at) as last_updated FROM appointments;');
+          if (res.rows && res.rows[0]) {
+            const row = res.rows[0];
+            const checkSignature = `${row.count}_${row.last_updated}`;
+            if (this._lastTursoSignature && this._lastTursoSignature !== checkSignature) {
+              this._lastTursoSignature = checkSignature;
+              await this.reloadFromTurso();
+              this.showToast('Aggiornamento in tempo reale ricevuto da un altro utente!', 'info');
+            } else if (!this._lastTursoSignature) {
+              this._lastTursoSignature = checkSignature;
+            }
+          }
+        } catch (e) {}
+      }, 15000);
+    }
+
+    // Ricarica tutti gli interventi da Turso DB
+    async reloadFromTurso() {
+      if (!this.turso.isConfigured()) return;
+      try {
+        const res = await this.turso.execute('SELECT * FROM appointments ORDER BY date ASC, time ASC;');
+        if (res.rows) {
+          this.events = this.mapTursoRowsToEvents(res.rows);
+          try { localStorage.setItem(this.storageKey, JSON.stringify(this.events)); } catch (e) {}
+          this.updateFilters();
+          this.renderView();
+        }
+      } catch (e) {}
+    }
+
+    // Aggiorna lo stato visivo del badge Turso
+    updateTursoBadge(status) {
+      const badge = this.container.querySelector('#asim-turso-badge');
+      const text = this.container.querySelector('#asim-turso-text');
+      if (!badge || !text) return;
+
+      if (status === 'online') {
+        badge.className = 'asim-badge-turso is-online';
+        text.textContent = 'Turso Cloud Live';
+        badge.title = 'Database Turso SQLite Cloud sincronizzato in tempo reale su tutti i dispositivi';
+      } else if (status === 'syncing') {
+        badge.className = 'asim-badge-turso is-syncing';
+        text.textContent = 'Sync in corso...';
+      } else if (status === 'error') {
+        badge.className = 'asim-badge-turso is-offline';
+        text.textContent = 'Turso Offline (Locale)';
+        badge.title = 'Impossibile contattare Turso, operatività temporanea in locale';
+      }
+    }
+
+    // Svuota tutti i dati (da Turso e locale)
+    async clearData() {
       this.events = [];
       localStorage.removeItem(this.storageKey);
+
+      if (this.turso.isConfigured()) {
+        try {
+          await this.turso.execute('DELETE FROM appointments;');
+        } catch (e) {}
+      }
+
       this.updateFilters();
       this.renderView();
 
-      // Cancella anche sul server se attivo
       try {
-        fetch(this.apiUrl + '?action=clear', { method: 'POST' });
+        fetch(this.apiUrl + '?action=clear', { method: 'POST' }).catch(() => {});
       } catch (e) {}
+      this.showToast('Calendario svuotato sia in locale che su Turso DB.', 'info');
     }
 
     // Parser CSV completo con supporto per quote multiriga ed escape
@@ -888,6 +1420,69 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
       codeSelect.value = this.jobCodes.has(curCode) ? curCode : 'all';
       this.activeJobCode = codeSelect.value;
+
+      // Renderizza i pill rapidi per i tecnici
+      const pillsContainer = this.container.querySelector('#asim-tech-pills');
+      if (pillsContainer) {
+        if (this.technicians.size > 0) {
+          pillsContainer.style.display = 'flex';
+          let pillsHtml = `
+            <button class="asim-pill-btn ${this.activeTechnician === 'all' ? 'active' : ''}" data-tech="all">
+              Tutti (${this.events.length})
+            </button>
+          `;
+          Array.from(this.technicians).sort().forEach(tech => {
+            const count = this.events.filter(e => e.technician === tech).length;
+            const colors = this.getTechColor(tech);
+            const isAct = this.activeTechnician === tech;
+            pillsHtml += `
+              <button class="asim-pill-btn ${isAct ? 'active' : ''}" data-tech="${tech}" 
+                style="${isAct ? `background-color: ${colors.bg}; color: ${colors.text}; border-color: ${colors.border};` : ''}">
+                @${tech} (${count})
+              </button>
+            `;
+          });
+          pillsContainer.innerHTML = pillsHtml;
+
+          pillsContainer.querySelectorAll('.asim-pill-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+              this.activeTechnician = btn.dataset.tech;
+              techSelect.value = this.activeTechnician;
+              this.updateFilters();
+              this.renderView();
+            });
+          });
+        } else {
+          pillsContainer.style.display = 'none';
+        }
+      }
+    }
+
+    // Esporta gli interventi visibili/filtrati in un file CSV scaricabile
+    exportCSV() {
+      const filtered = this.getFilteredEvents();
+      if (!filtered || filtered.length === 0) {
+        this.showToast('Nessun intervento da esportare', 'error');
+        return;
+      }
+
+      let csv = 'TYPE,CONTENT,DESCRIPTION,PRIORITY,AUTHOR,DATE\n';
+      filtered.forEach(ev => {
+        const content = `"${(ev.clientName + ' ' + (ev.jobCode !== 'Altro' ? ev.jobCode : '') + ' @' + ev.technician).replace(/"/g, '""').trim()}"`;
+        const desc = `"PDR: ${ev.pdr}\\nMatricola : ${ev.matricola}\\nTecnico: ${ev.technician}\\nIndirizzo: ${ev.indirizzo}\\nTelefono: ${ev.telefono}\\nNOTE: ${ev.note}"`;
+        csv += `task,${content},${desc},${ev.priority},"${ev.author || ''}","${ev.date} at ${ev.time}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `interventi_asim_${this.formatISODate(new Date())}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      this.showToast(`Esportati ${filtered.length} interventi in CSV!`, 'success');
     }
 
     // Filtra gli eventi in base a ricerca, tecnico e codice lavoro
@@ -951,6 +1546,20 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         this.renderDayView(body, label, filtered);
       } else if (this.currentView === 'list') {
         this.renderListView(body, label, filtered);
+      }
+
+      // Aggiorna intestazione per la stampa
+      const printTitle = this.container.querySelector('#asim-print-view-title');
+      const printFilter = this.container.querySelector('#asim-print-filter-info');
+      if (printTitle && label) {
+        printTitle.textContent = label.textContent;
+      }
+      if (printFilter) {
+        const filterParts = [];
+        if (this.activeTechnician !== 'all') filterParts.push(`Tecnico: @${this.activeTechnician}`);
+        if (this.activeJobCode !== 'all') filterParts.push(`Codice: ${this.activeJobCode}`);
+        if (this.searchQuery) filterParts.push(`Cerca: "${this.searchQuery}"`);
+        printFilter.textContent = filterParts.length > 0 ? filterParts.join(' | ') : 'Tutti gli interventi';
       }
     }
 
@@ -1021,7 +1630,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         dayEvents.slice(0, maxVisible).forEach(ev => {
           const colors = this.getTechColor(ev.technician);
           html += `
-            <div class="asim-event-chip" data-id="${ev.id}" style="background-color: ${colors.bg}; color: ${colors.text}; border-left-color: ${colors.border};" title="${this.escapeHtml(ev.clientName)}">
+            <div class="asim-event-chip" draggable="true" data-id="${ev.id}" style="background-color: ${colors.bg}; color: ${colors.text}; border-left-color: ${colors.border};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)}">
               <span class="asim-chip-time">${ev.time}</span>
               <span class="asim-chip-code">${ev.jobCode}</span>
               <span class="asim-chip-name">${this.escapeHtml(ev.clientName)}</span>
@@ -1058,7 +1667,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       container.innerHTML = html;
 
-      // Event click chip
+      // Event click e drag sui chip del mese
       container.querySelectorAll('.asim-event-chip').forEach(chip => {
         chip.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1066,10 +1675,49 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           const ev = this.events.find(x => x.id === eventId);
           if (ev) this.openModal(ev);
         });
+
+        chip.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData('text/plain', chip.dataset.id);
+          chip.classList.add('is-dragging');
+        });
+
+        chip.addEventListener('dragend', () => {
+          chip.classList.remove('is-dragging');
+        });
       });
 
-      // Click su un giorno o su "+altri" -> passa alla vista Giorno
+      // Drop e click sulle celle del mese
       container.querySelectorAll('.asim-day-cell:not(.is-other-month)').forEach(cell => {
+        cell.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          cell.classList.add('drag-over');
+        });
+
+        cell.addEventListener('dragleave', (e) => {
+          if (!cell.contains(e.relatedTarget)) {
+            cell.classList.remove('drag-over');
+          }
+        });
+
+        cell.addEventListener('drop', (e) => {
+          e.preventDefault();
+          cell.classList.remove('drag-over');
+          const eventId = e.dataTransfer.getData('text/plain');
+          const targetDate = cell.dataset.date;
+          if (eventId && targetDate) {
+            const ev = this.events.find(x => x.id === eventId);
+            if (ev && ev.date !== targetDate) {
+              ev.date = targetDate;
+              const dateParts = targetDate.split('-');
+              const timeParts = ev.time.split(':');
+              ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+              this.saveEventsPermanently(ev, 'upsert');
+              this.showToast(`Intervento di ${ev.clientName} spostato al ${targetDate}!`, 'success');
+            }
+          }
+        });
+
         cell.addEventListener('click', () => {
           const dateStr = cell.dataset.date;
           if (dateStr) {
@@ -1116,7 +1764,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         dayEvents.sort((a, b) => a.time.localeCompare(b.time));
 
         html += `
-          <div class="asim-week-col ${isToday ? 'is-today' : ''}">
+          <div class="asim-week-col ${isToday ? 'is-today' : ''}" data-date="${iso}">
             <div class="asim-week-col-header">
               <span class="asim-week-day-name">${dayNames[i]}</span>
               <span class="asim-week-day-num">${d.getDate()}</span>
@@ -1130,7 +1778,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           dayEvents.forEach(ev => {
             const colors = this.getTechColor(ev.technician);
             html += `
-              <div class="asim-card-event" data-id="${ev.id}" style="border-left: 4px solid ${colors.border};">
+              <div class="asim-card-event" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border};" title="Trascina per spostare di giorno">
                 <div class="asim-card-top">
                   <span class="asim-card-time">${ev.time}</span>
                   <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
@@ -1152,10 +1800,53 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       html += `</div>`;
       container.innerHTML = html;
 
+      // Click e Drag sui card evento
       container.querySelectorAll('.asim-card-event').forEach(card => {
         card.addEventListener('click', () => {
           const ev = this.events.find(x => x.id === card.dataset.id);
           if (ev) this.openModal(ev);
+        });
+
+        card.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData('text/plain', card.dataset.id);
+          card.classList.add('is-dragging');
+        });
+
+        card.addEventListener('dragend', () => {
+          card.classList.remove('is-dragging');
+        });
+      });
+
+      // Drop sulle colonne della settimana
+      container.querySelectorAll('.asim-week-col').forEach(col => {
+        col.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          col.classList.add('drag-over');
+        });
+
+        col.addEventListener('dragleave', (e) => {
+          if (!col.contains(e.relatedTarget)) {
+            col.classList.remove('drag-over');
+          }
+        });
+
+        col.addEventListener('drop', (e) => {
+          e.preventDefault();
+          col.classList.remove('drag-over');
+          const eventId = e.dataTransfer.getData('text/plain');
+          const targetDate = col.dataset.date;
+          if (eventId && targetDate) {
+            const ev = this.events.find(x => x.id === eventId);
+            if (ev && ev.date !== targetDate) {
+              ev.date = targetDate;
+              const dateParts = targetDate.split('-');
+              const timeParts = ev.time.split(':');
+              ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+              this.saveEventsPermanently(ev, 'upsert');
+              this.showToast(`Intervento di ${ev.clientName} spostato al ${targetDate}!`, 'success');
+            }
+          }
         });
       });
     }
@@ -1334,6 +2025,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const modal = this.container.querySelector('#asim-modal');
       const colors = this.getTechColor(ev.technician);
 
+      // Reset modalità vista/modifica
+      const viewMode = this.container.querySelector('#modal-view-mode');
+      const editMode = this.container.querySelector('#modal-edit-mode');
+      const btnEdit = this.container.querySelector('#modal-btn-edit');
+      if (viewMode) viewMode.style.display = 'block';
+      if (editMode) editMode.style.display = 'none';
+      if (btnEdit) btnEdit.style.display = 'inline-block';
+
       // Titolo e Badge
       this.container.querySelector('#modal-title').textContent = ev.clientName;
       this.container.querySelector('#modal-code').textContent = ev.jobCode || 'Intervento';
@@ -1407,6 +2106,39 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       this.container.querySelector('#modal-raw-date').textContent = ev.rawDate ? `(Origine: ${ev.rawDate})` : '';
 
       modal.style.display = 'flex';
+    }
+
+    // Passa alla modalità modifica
+    openEditMode(ev) {
+      const root = this.container;
+      const viewMode = root.querySelector('#modal-view-mode');
+      const editMode = root.querySelector('#modal-edit-mode');
+      const btnEdit = root.querySelector('#modal-btn-edit');
+      if (viewMode) viewMode.style.display = 'none';
+      if (editMode) editMode.style.display = 'block';
+      if (btnEdit) btnEdit.style.display = 'none';
+
+      root.querySelector('#edit-client').value = ev.clientName || '';
+      root.querySelector('#edit-date').value = ev.date || '';
+      root.querySelector('#edit-time').value = ev.time || '09:00';
+      root.querySelector('#edit-tech').value = ev.technician || '';
+      root.querySelector('#edit-code').value = ev.jobCode || '';
+      root.querySelector('#edit-address').value = ev.indirizzo || '';
+      root.querySelector('#edit-phone').value = ev.telefono || '';
+      root.querySelector('#edit-priority').value = String(ev.priority || 2);
+      root.querySelector('#edit-pdr').value = ev.pdr || '';
+      root.querySelector('#edit-matricola').value = ev.matricola || '';
+      root.querySelector('#edit-notes').value = ev.note || '';
+
+      const datalist = root.querySelector('#edit-tech-datalist');
+      if (datalist) {
+        datalist.innerHTML = '';
+        Array.from(this.technicians).forEach(tech => {
+          const opt = document.createElement('option');
+          opt.value = tech;
+          datalist.appendChild(opt);
+        });
+      }
     }
 
     showToast(message, type = 'info') {

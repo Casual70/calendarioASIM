@@ -96,6 +96,59 @@
   font-weight: 600;
 }
 
+/* Badge Turso DB Cloud Status */
+.asim-badge-turso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-left: 10px;
+  cursor: default;
+  transition: all 0.2s;
+}
+
+.asim-badge-turso.is-syncing {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.asim-badge-turso.is-offline {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.asim-dot-live {
+  width: 7px;
+  height: 7px;
+  background-color: #10b981;
+  border-radius: 50%;
+  animation: pulseTursoLive 2s infinite;
+}
+
+.asim-badge-turso.is-syncing .asim-dot-live {
+  background-color: #3b82f6;
+  animation: none;
+}
+
+.asim-badge-turso.is-offline .asim-dot-live {
+  background-color: #ef4444;
+  animation: none;
+}
+
+@keyframes pulseTursoLive {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
 .asim-cal-actions {
   display: flex;
   align-items: center;
@@ -1187,29 +1240,203 @@
 }
 
 /* ----------------------------------------------------
+   FORM MODIFICA INTERVENTO
+   ---------------------------------------------------- */
+.asim-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.asim-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asim-form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.asim-form-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--asim-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.asim-form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--asim-radius-sm);
+  border: 1px solid var(--asim-gray-300);
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--asim-gray-800);
+  background-color: #ffffff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.asim-form-input:focus {
+  border-color: var(--asim-primary);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.asim-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--asim-gray-200);
+}
+
+/* Feedback Drag & Drop per lo spostamento interventi */
+.asim-card-event[draggable="true"],
+.asim-event-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.asim-card-event.is-dragging,
+.asim-event-chip.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.asim-week-col.drag-over,
+.asim-day-cell.drag-over {
+  background-color: #e0f2fe !important;
+  outline: 2px dashed var(--asim-primary);
+  outline-offset: -2px;
+}
+
+/* Intestazione Stampa (nascosta a schermo, visibile in stampa) */
+.asim-print-header {
+  display: none;
+}
+
+/* ----------------------------------------------------
    STILI PER LA STAMPA (@media print)
    ---------------------------------------------------- */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: landscape;
+    margin: 8mm;
   }
-  .asim-cal,
-  .asim-cal * {
-    visibility: visible;
+
+  body {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
+
+  /* Nascondi elementi esterni al calendario */
+  body > *:not(.asim-cal):not(#asim-calendar-root):not(#asim-calendar-app):not(#calendario_custom):not(.main-container) {
+    display: none !important;
+  }
+
   .asim-cal {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    border: none;
-    box-shadow: none;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
   }
-  .asim-cal-toolbar .asim-cal-actions,
-  .asim-search-box,
+
+  /* Nascondi comandi, barre e modali interattive */
+  .asim-cal-toolbar,
+  .asim-cal-filters,
+  .asim-tech-pills-bar,
   .asim-nav-buttons button,
-  .asim-view-buttons {
+  .asim-view-buttons,
+  .asim-modal-overlay,
+  .asim-dropzone-overlay,
+  .asim-toast,
+  .asim-btn-copy,
+  .asim-search-box {
     display: none !important;
+  }
+
+  /* Mostra elegante intestazione di stampa */
+  .asim-print-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #0284c7;
+  }
+
+  .asim-print-company {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .asim-print-tagline {
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .asim-print-view-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #0284c7;
+    text-align: right;
+  }
+
+  .asim-print-filter-info {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-align: right;
+  }
+
+  /* Forza la visualizzazione fedele dei colori e sfondi */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Griglia Settimanale ottimizzata a 7 colonne su pagina orizzontale */
+  .asim-week-container {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 4px !important;
+    background: transparent !important;
+  }
+
+  .asim-week-col {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    min-height: 480px !important;
+    page-break-inside: avoid;
+  }
+
+  .asim-week-col-header {
+    background-color: #f1f5f9 !important;
+    padding: 6px !important;
+  }
+
+  .asim-card-event {
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* Griglia Mese */
+  .asim-month-grid {
+    page-break-inside: avoid;
+  }
+
+  .asim-day-cell {
+    border: 1px solid #e2e8f0 !important;
+    min-height: 85px !important;
   }
 }
