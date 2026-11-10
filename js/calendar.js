@@ -2841,7 +2841,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       bodyText += `-----------------------------------------------------\n`;
       bodyText += `Consulta il calendario online:\n`;
-      bodyText += `https://casual70.github.io/calendarioASIM/\n\n`;
+      bodyText += `https://www.asimultiservices.com/calendario\n\n`;
       bodyText += `ASIM Multiservices SRL\n`;
 
       const fullHtml = `
@@ -2857,7 +2857,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div style="padding:16px 20px;">
               ${htmlCards}
               <div style="margin-top:20px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:12px; color:#64748b; text-align:center;">
-                <a href="https://casual70.github.io/calendarioASIM/" style="color:#0284c7; font-weight:600; text-decoration:none;">Apri il calendario online &rarr;</a>
+                <a href="https://www.asimultiservices.com/calendario" style="color:#0284c7; font-weight:600; text-decoration:none;">Apri il calendario online &rarr;</a>
               </div>
             </div>
           </div>
