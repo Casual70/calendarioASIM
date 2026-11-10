@@ -62,7 +62,14 @@ Il database Turso è già stato inizializzato e popolato con gli interventi iniz
    * Elimina interventi con conferma di sicurezza (`🗑️ Elimina`).
    * Le modifiche sono memorizzate nel cloud Turso e riflesse istantaneamente su tutti gli altri schermi grazie al polling automatico in tempo reale.
 
-2. **Visualizzazione Predefinita a Settimana**:
+2. **Gestione Durata Intervento e Occupazione Fascia Oraria**:
+   * All'inserimento o modifica di un intervento è possibile specificare la **durata in ore** (es. `0.5` = 30m, `1` = 1h predefinita, `1.5`, `2`, `3`, `4`).
+   * Sono disponibili comodi pulsanti pill per la selezione rapida (`30m`, `1h`, `1h30`, `2h`, `3h`, `4h`).
+   * **Occupazione visiva dello spazio**: Nella vista settimanale e giornaliera, la scheda dell'intervento occupa verticalmente uno spazio proporzionale alla durata specificata (un intervento di 2 ore occupa il doppio dello spazio di uno da 1 ora).
+   * Mostra l'orario di inizio e di fine calcolato (es. `09:30 - 11:30`) e una barra di occupazione oraria (`⏱️ 2 ore | 09:30 ➔ 11:30`).
+   * **Rilevamento conflitti/sovrapposizioni**: Se due interventi per lo stesso tecnico si sovrappongono nella stessa fascia oraria, il sistema avvisa in tempo reale nel modulo con un box rosso (`⚠️ Attenzione sovrapposizione`) e contrassegna la scheda nel calendario con un bordo tratteggiato e badge di conflitto.
+
+3. **Visualizzazione Predefinita a Settimana**:
    * All'apertura viene mostrata la comoda panoramica settimanale a 7 colonne (Lunedì - Domenica).
    * Visualizzazione mensile allineata al pixel: ogni colonna ha identica larghezza garantendo perfetto allineamento tra intestazione giorni e celle.
 
