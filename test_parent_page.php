@@ -94,7 +94,7 @@
       AsimCalendar.init({
         container: '#calendario_custom',
         apiUrl: 'calendario_custom/api.php',
-        defaultView: 'month'
+        defaultView: 'week'
       });
     });
   </script>

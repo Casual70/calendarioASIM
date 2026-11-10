@@ -100,6 +100,29 @@ if ($action === 'clear' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// 5. SEND_EMAIL: Invia email con riepilogo calendario ad un indirizzo
+if ($action === 'send_email' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = file_get_contents('php://input');
+    $data = json_decode($input, true);
+
+    if (!empty($data['to']) && filter_var($data['to'], FILTER_VALIDATE_EMAIL)) {
+        $to = $data['to'];
+        $subject = !empty($data['subject']) ? $data['subject'] : 'Calendario Interventi ASIM Multiservices';
+        $body = !empty($data['body']) ? $data['body'] : '';
+        $headers = "From: noreply@asimultiservices.com\r\n" .
+                   "Reply-To: info@asimultiservices.com\r\n" .
+                   "Content-Type: text/plain; charset=UTF-8\r\n" .
+                   "X-Mailer: PHP/" . phpversion();
+
+        $sent = @mail($to, $subject, $body, $headers);
+        echo json_encode(['status' => $sent ? 'ok' : 'sent_fallback', 'to' => $to]);
+        exit;
+    }
+
+    echo json_encode(['status' => 'error', 'message' => 'Indirizzo email non valido']);
+    exit;
+}
+
 echo json_encode(['status' => 'error', 'message' => 'Azione non riconosciuta']);
 exit;
 

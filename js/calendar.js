@@ -147,7 +147,7 @@
       this.defaultCsvUrl = options.defaultCsvUrl || 'sample.csv';
       this.storageKey = options.storageKey || 'asim_calendar_events_v1';
       this.events = [];
-      this.currentView = options.defaultView || 'month'; // 'month', 'week', 'day', 'list'
+      this.currentView = options.defaultView || 'week'; // 'week', 'month', 'day', 'list'
       this.selectedDate = new Date();
       this.activeTechnician = 'all';
       this.activeJobCode = 'all';
@@ -204,7 +204,7 @@
               </div>
             </div>
 
-            <!-- Azioni Rapide (Nuovo Intervento, Import, Demo, Stampa) -->
+            <!-- Azioni Rapide (Nuovo Intervento, Invia Email, Import, Demo, Stampa, Esporta) -->
             <div class="asim-cal-actions">
               <button class="asim-btn asim-btn-primary" id="asim-btn-add" title="Aggiungi nuovo intervento">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -212,6 +212,14 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
                 <span>+ Nuovo Intervento</span>
+              </button>
+
+              <button class="asim-btn asim-btn-outline" id="asim-btn-email" title="Invia il calendario visualizzato ad un indirizzo email">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <span>Invia per Email</span>
               </button>
 
               <label class="asim-btn asim-btn-outline" title="Carica file CSV esportato">
@@ -303,10 +311,10 @@
             </div>
 
             <div class="asim-view-buttons">
-              <button class="asim-view-btn active" data-view="month">Mese</button>
-              <button class="asim-view-btn" data-view="week">Settimana</button>
-              <button class="asim-view-btn" data-view="day">Giorno</button>
-              <button class="asim-view-btn" data-view="list">Elenco</button>
+              <button class="asim-view-btn ${this.currentView === 'month' ? 'active' : ''}" data-view="month">Mese</button>
+              <button class="asim-view-btn ${this.currentView === 'week' ? 'active' : ''}" data-view="week">Settimana</button>
+              <button class="asim-view-btn ${this.currentView === 'day' ? 'active' : ''}" data-view="day">Giorno</button>
+              <button class="asim-view-btn ${this.currentView === 'list' ? 'active' : ''}" data-view="list">Elenco</button>
             </div>
           </div>
 
@@ -527,6 +535,67 @@
             </div>
           </div>
 
+          <!-- Modale Invio Email Calendario -->
+          <div class="asim-modal-overlay" id="asim-email-modal" style="display:none;">
+            <div class="asim-modal-card asim-modal-card-lg">
+              <div class="asim-modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 1.25rem;">✉️</span>
+                  <h3 style="margin: 0; font-size: 1.15rem; color: var(--asim-gray-900);">Invia Calendario via Email</h3>
+                </div>
+                <button class="asim-modal-close" id="email-modal-close">&times;</button>
+              </div>
+
+              <div class="asim-modal-body" style="padding-top: 8px;">
+                <div class="asim-email-context-banner" id="email-context-banner">
+                  <strong id="email-view-label">Settimana</strong>
+                  <span id="email-view-count">0 interventi</span>
+                </div>
+
+                <form id="asim-email-form" class="asim-form-grid" style="margin-top: 14px;">
+                  <div class="asim-form-group full-width">
+                    <label for="email-to">Destinatario (Email) *</label>
+                    <div style="display: flex; gap: 8px;">
+                      <input type="email" id="email-to" class="asim-form-input" placeholder="es. tecnico@asimultiservices.com o cliente" required>
+                      <select id="email-quick-presets" class="asim-form-input" style="width: auto; max-width: 190px;">
+                        <option value="">Destinatario rapido...</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="asim-form-group full-width">
+                    <label for="email-subject">Oggetto Email *</label>
+                    <input type="text" id="email-subject" class="asim-form-input" required>
+                  </div>
+
+                  <div class="asim-form-group full-width">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                      <label for="email-body">Testo Riepilogo Interventi (Corpo Messaggio)</label>
+                      <button type="button" class="asim-btn asim-btn-xs asim-btn-outline" id="email-btn-copy-body" title="Copia negli appunti per incollarlo in qualsiasi email o chat">
+                        📋 Copia Testo
+                      </button>
+                    </div>
+                    <textarea id="email-body" class="asim-form-input" rows="10" style="font-family: monospace, monospace; font-size: 0.8rem; line-height: 1.45; white-space: pre;"></textarea>
+                  </div>
+
+                  <div class="asim-form-actions full-width" style="margin-top: 14px;">
+                    <button type="button" class="asim-btn asim-btn-outline" id="email-btn-print-pdf" title="Stampa o salva come PDF da allegare all'email">
+                      📄 Salva PDF da allegare
+                    </button>
+                    <div style="display: flex; gap: 8px;">
+                      <button type="button" class="asim-btn asim-btn-outline" id="email-btn-cancel">
+                        Chiudi
+                      </button>
+                      <button type="submit" class="asim-btn asim-btn-primary" id="email-btn-send">
+                        ✉️ Apri nel Client Email
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
           <!-- Toast Notification -->
           <div class="asim-toast" id="asim-toast" style="display:none;"></div>
         </div>
@@ -681,6 +750,9 @@
 
       // Annulla Modifica
       root.querySelector('#edit-btn-cancel').addEventListener('click', () => {
+        root.querySelector('#modal-edit-mode').style.display = 'none';
+        root.querySelector('#modal-view-mode').style.display = 'block';
+        root.querySelector('#modal-btn-edit').style.display = 'inline-block';
         if (!this.currentModalEvent) {
           modal.style.display = 'none';
         } else {
@@ -691,6 +763,7 @@
         }
       });
 
+      // Salva Modifiche Form (Salvataggio Permanente)
       // Salva Modifiche Form (Salvataggio Permanente nel Cloud Turso)
       root.querySelector('#asim-edit-form').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -766,6 +839,91 @@
 
       root.querySelector('#edit-btn-delete').addEventListener('click', handleDeleteEvent);
       root.querySelector('#modal-btn-delete-view').addEventListener('click', handleDeleteEvent);
+
+      // Gestione Modale Email Calendario
+      const btnEmail = root.querySelector('#asim-btn-email');
+      if (btnEmail) {
+        btnEmail.addEventListener('click', () => {
+          this.openEmailModal();
+        });
+      }
+
+      const emailModal = root.querySelector('#asim-email-modal');
+      const emailClose = root.querySelector('#email-modal-close');
+      const emailCancel = root.querySelector('#email-btn-cancel');
+      if (emailClose) emailClose.addEventListener('click', () => { emailModal.style.display = 'none'; });
+      if (emailCancel) emailCancel.addEventListener('click', () => { emailModal.style.display = 'none'; });
+
+      const emailPresets = root.querySelector('#email-quick-presets');
+      if (emailPresets) {
+        emailPresets.addEventListener('change', () => {
+          if (emailPresets.value) {
+            root.querySelector('#email-to').value = emailPresets.value;
+          }
+        });
+      }
+
+      const btnCopyBody = root.querySelector('#email-btn-copy-body');
+      if (btnCopyBody) {
+        btnCopyBody.addEventListener('click', () => {
+          const text = root.querySelector('#email-body').value;
+          if (text) {
+            navigator.clipboard.writeText(text).then(() => {
+              this.showToast('Testo interventi copiato negli appunti!', 'success');
+              const old = btnCopyBody.textContent;
+              btnCopyBody.textContent = '✓ Copiato!';
+              setTimeout(() => { btnCopyBody.textContent = old; }, 2000);
+            });
+          }
+        });
+      }
+
+      const btnPrintPdf = root.querySelector('#email-btn-print-pdf');
+      if (btnPrintPdf) {
+        btnPrintPdf.addEventListener('click', () => {
+          window.print();
+        });
+      }
+
+      const emailForm = root.querySelector('#asim-email-form');
+      if (emailForm) {
+        emailForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const to = root.querySelector('#email-to').value.trim();
+          const subject = root.querySelector('#email-subject').value.trim();
+          const body = root.querySelector('#email-body').value;
+
+          if (!to) {
+            this.showToast('Inserisci un indirizzo email valido', 'error');
+            return;
+          }
+
+          try {
+            localStorage.setItem('asim_last_email_to', to);
+          } catch (err) {}
+
+          try {
+            navigator.clipboard.writeText(body);
+          } catch (err) {}
+
+          const mailtoUri = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          window.location.href = mailtoUri;
+
+          this.showToast('Client email aperto! Testo copiato anche negli appunti.', 'success');
+
+          if (this.apiUrl && this.apiUrl !== '') {
+            fetch(this.apiUrl + '?action=send_email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to: to, subject: subject, body: body })
+            }).catch(() => {});
+          }
+
+          setTimeout(() => {
+            emailModal.style.display = 'none';
+          }, 800);
+        });
+      }
 
       // Pulsanti Copia PDR/Matricola
       root.querySelectorAll('.asim-btn-copy').forEach(btn => {
@@ -1638,6 +1796,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           <div class="asim-day-cell ${isToday ? 'is-today' : ''}" data-date="${currentIso}">
             <div class="asim-day-top">
               <span class="asim-day-number">${day}</span>
+              ${dayEvents.length > 0 ? `<span class="asim-day-badge">${dayEvents.length}</span>` : ''}
               <div style="display:flex; align-items:center; gap:4px;">
                 ${dayEvents.length > 0 ? `<span class="asim-day-badge">${dayEvents.length}</span>` : ''}
                 <button class="asim-cell-add-btn" data-date="${currentIso}" title="Aggiungi intervento per il ${day}">+</button>
@@ -1803,6 +1962,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         `;
 
         if (dayEvents.length === 0) {
+          html += `<div class="asim-empty-day">Nessun intervento</div>`;
           html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
           dayEvents.forEach(ev => {
@@ -1917,6 +2077,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       let html = `
         <div class="asim-day-view-container">
+          <div class="asim-day-header-summary">
+            <h3>Interventi in programma per oggi (${dayEvents.length})</h3>
           <div class="asim-day-header-summary" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <h3 style="margin:0;">Interventi in programma per oggi (${dayEvents.length})</h3>
             <button class="asim-btn asim-btn-sm asim-btn-primary asim-day-add-btn" data-date="${iso}">
@@ -2030,6 +2192,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
         html += `
           <div class="asim-list-date-group">
+            <h4 class="asim-list-date-title">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <h4 class="asim-list-date-title" style="margin:0;">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
               <button class="asim-col-add-btn" data-date="${dateStr}" title="Aggiungi intervento per questo giorno">+</button>
@@ -2089,6 +2252,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
+    // Apre la modale di dettaglio intervento
     // Apre la modale in modalità CREAZIONE nuovo intervento
     openCreateMode(defaultDate = null) {
       this.currentModalEvent = null;
@@ -2159,6 +2323,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       if (viewMode) viewMode.style.display = 'block';
       if (editMode) editMode.style.display = 'none';
+      if (btnEdit) btnEdit.style.display = 'inline-block';
       if (btnEdit) btnEdit.style.display = 'inline-flex';
       if (btnDeleteView) btnDeleteView.style.display = 'inline-flex';
       if (headerBadges) headerBadges.style.display = 'flex';
@@ -2282,6 +2447,144 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           datalist.appendChild(opt);
         });
       }
+    }
+
+    // Apre la modale per inviare il calendario visualizzato via email
+    openEmailModal() {
+      const root = this.container;
+      const modal = root.querySelector('#asim-email-modal');
+      const filtered = this.getFilteredEvents();
+
+      // Determina periodo ed eventi della vista corrente
+      let periodLabel = '';
+      let relevantEvents = [];
+
+      if (this.currentView === 'week') {
+        const cur = new Date(this.selectedDate);
+        let dayOfWeek = cur.getDay() - 1;
+        if (dayOfWeek === -1) dayOfWeek = 6;
+        const startOfWeek = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 6);
+        periodLabel = `Settimana ${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()}`;
+        const startIso = this.formatISODate(startOfWeek);
+        const endIso = this.formatISODate(endOfWeek);
+        relevantEvents = filtered.filter(ev => ev.date >= startIso && ev.date <= endIso);
+      } else if (this.currentView === 'day') {
+        const iso = this.formatISODate(this.selectedDate);
+        const dayNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+        periodLabel = `${dayNames[this.selectedDate.getDay()]} ${this.selectedDate.getDate()}/${this.selectedDate.getMonth() + 1}/${this.selectedDate.getFullYear()}`;
+        relevantEvents = filtered.filter(ev => ev.date === iso);
+      } else if (this.currentView === 'month') {
+        const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+        periodLabel = `Mese di ${monthNames[this.selectedDate.getMonth()]} ${this.selectedDate.getFullYear()}`;
+        const prefix = `${this.selectedDate.getFullYear()}-${String(this.selectedDate.getMonth() + 1).padStart(2, '0')}`;
+        relevantEvents = filtered.filter(ev => ev.date.startsWith(prefix));
+      } else {
+        periodLabel = 'Tutti gli interventi visibili';
+        relevantEvents = filtered;
+      }
+
+      const viewLabelEl = root.querySelector('#email-view-label');
+      const viewCountEl = root.querySelector('#email-view-count');
+      const subjectInput = root.querySelector('#email-subject');
+      const bodyTextarea = root.querySelector('#email-body');
+      const toInput = root.querySelector('#email-to');
+      const presetsSelect = root.querySelector('#email-quick-presets');
+
+      viewLabelEl.textContent = periodLabel;
+      viewCountEl.textContent = `${relevantEvents.length} interventi in riepilogo`;
+
+      // Ripristina ultimo destinatario se salvato
+      try {
+        toInput.value = localStorage.getItem('asim_last_email_to') || '';
+      } catch (e) {}
+
+      // Popola preset email
+      presetsSelect.innerHTML = '<option value="">Destinatario rapido...</option>';
+      if (this.activeTechnician && this.activeTechnician !== 'all') {
+        const opt = document.createElement('option');
+        opt.value = `${this.activeTechnician.toLowerCase().replace(/[^a-z0-9]/g, '')}@asimultiservices.com`;
+        opt.textContent = `Tecnico @${this.activeTechnician}`;
+        presetsSelect.appendChild(opt);
+      }
+      Array.from(this.technicians).forEach(tech => {
+        if (tech !== this.activeTechnician) {
+          const opt = document.createElement('option');
+          opt.value = `${tech.toLowerCase().replace(/[^a-z0-9]/g, '')}@asimultiservices.com`;
+          opt.textContent = `Tecnico @${tech}`;
+          presetsSelect.appendChild(opt);
+        }
+      });
+      const optAdmin = document.createElement('option');
+      optAdmin.value = 'info@asimultiservices.com';
+      optAdmin.textContent = 'Ufficio / Info ASIM';
+      presetsSelect.appendChild(optAdmin);
+
+      // Oggetto Email
+      const techSuffix = this.activeTechnician !== 'all' ? ` (@${this.activeTechnician})` : '';
+      subjectInput.value = `ASIM Multiservices - Riepilogo Interventi: ${periodLabel}${techSuffix}`;
+
+      // Costruzione Corpo Email Formattato
+      let bodyText = `====================================================\n`;
+      bodyText += `ASIM MULTISERVICES SRL - PIANIFICAZIONE INTERVENTI\n`;
+      bodyText += `====================================================\n`;
+      bodyText += `Periodo di riferimento: ${periodLabel}\n`;
+      bodyText += `Filtro Tecnico: ${this.activeTechnician === 'all' ? 'Tutti i tecnici' : '@' + this.activeTechnician}\n`;
+      bodyText += `Filtro Codice: ${this.activeJobCode === 'all' ? 'Tutti i codici' : this.activeJobCode}\n`;
+      bodyText += `Totale Interventi: ${relevantEvents.length}\n`;
+      bodyText += `Generato il: ${new Date().toLocaleString('it-IT')}\n`;
+      bodyText += `----------------------------------------------------\n\n`;
+
+      if (relevantEvents.length === 0) {
+        bodyText += `Nessun intervento programmato per il periodo e i filtri selezionati.\n\n`;
+      } else {
+        const grouped = {};
+        relevantEvents.forEach(ev => {
+          if (!grouped[ev.date]) grouped[ev.date] = [];
+          grouped[ev.date].push(ev);
+        });
+
+        const sortedDates = Object.keys(grouped).sort();
+        sortedDates.forEach(dateStr => {
+          const parts = dateStr.split('-');
+          const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          const dateFormatted = dateObj.toLocaleDateString('it-IT', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          }).toUpperCase();
+
+          const dayList = grouped[dateStr];
+          dayList.sort((a, b) => a.time.localeCompare(b.time));
+
+          bodyText += `📅 ${dateFormatted} (${dayList.length} interventi):\n`;
+          bodyText += `----------------------------------------------------\n`;
+
+          dayList.forEach((ev, idx) => {
+            bodyText += `${idx + 1}) ORE ${ev.time} | COD: [${ev.jobCode || 'N/D'}] | PRIORITÀ: ${ev.priority || 2}\n`;
+            bodyText += `   Cliente:   ${ev.clientName}\n`;
+            bodyText += `   Tecnico:   @${ev.technician || 'Non assegnato'}\n`;
+            if (ev.indirizzo) bodyText += `   Indirizzo: ${ev.indirizzo}\n`;
+            if (ev.telefono)  bodyText += `   Telefono:  ${ev.telefono}\n`;
+            if (ev.pdr)       bodyText += `   PDR:       ${ev.pdr}\n`;
+            if (ev.matricola) bodyText += `   Matricola: ${ev.matricola}\n`;
+            if (ev.note)      bodyText += `   Note:      ${ev.note.replace(/\n/g, ' ')}\n`;
+            bodyText += `\n`;
+          });
+
+          bodyText += `\n`;
+        });
+      }
+
+      bodyText += `====================================================\n`;
+      bodyText += `Visualizza il calendario interattivo online:\n`;
+      bodyText += `https://casual70.github.io/calendarioASIM/\n`;
+      bodyText += `ASIM Multiservices SRL\n`;
+
+      bodyTextarea.value = bodyText;
+      modal.style.display = 'flex';
+      setTimeout(() => toInput.focus(), 50);
     }
 
     showToast(message, type = 'info') {

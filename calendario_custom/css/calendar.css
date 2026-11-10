@@ -412,11 +412,15 @@
 .asim-month-grid {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .asim-week-header {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  box-sizing: border-box;
   background-color: var(--asim-gray-50);
   border-bottom: 1px solid var(--asim-gray-200);
   text-align: center;
@@ -430,7 +434,9 @@
 
 .asim-days-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  box-sizing: border-box;
   background-color: var(--asim-gray-200);
   gap: 1px;
 }
@@ -438,11 +444,15 @@
 .asim-day-cell {
   background-color: #ffffff;
   min-height: 125px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
   transition: background-color 0.15s;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .asim-day-cell:hover {
@@ -497,6 +507,8 @@
   flex-direction: column;
   gap: 4px;
   flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Event Chip (riga compatta dentro la cella del mese) */
@@ -509,6 +521,9 @@
   border-left: 3px solid;
   font-size: 0.75rem;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -537,8 +552,10 @@
 
 .asim-chip-name {
   font-weight: 500;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asim-more-chip {
@@ -558,7 +575,9 @@
    ---------------------------------------------------- */
 .asim-week-container {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  box-sizing: border-box;
   background-color: var(--asim-gray-200);
   gap: 1px;
 }
@@ -566,8 +585,12 @@
 .asim-week-col {
   background-color: #ffffff;
   min-height: 400px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .asim-week-col.is-today {
@@ -1293,6 +1316,30 @@
   border-top: 1px solid var(--asim-gray-200);
 }
 
+/* Modale Invio Email */
+.asim-modal-card-lg {
+  max-width: 650px;
+  width: 95%;
+}
+
+.asim-email-context-banner {
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: var(--asim-radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #0369a1;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.asim-email-context-banner strong {
+  color: #0c4a6e;
+}
+
 /* Feedback Drag & Drop per lo spostamento interventi */
 .asim-card-event[draggable="true"],
 .asim-event-chip[draggable="true"] {
@@ -1445,6 +1492,7 @@
   .asim-dropzone-overlay,
   .asim-toast,
   .asim-btn-copy,
+  .asim-search-box {
   .asim-search-box,
   .asim-col-add-btn,
   .asim-cell-add-btn,
