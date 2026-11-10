@@ -2763,26 +2763,19 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const techSuffix = this.activeTechnician !== 'all' ? ` (@${this.activeTechnician})` : '';
       subjectInput.value = `ASIM Multiservices - Riepilogo Interventi: ${periodLabel}${techSuffix}`;
 
-      const priorityNames = {
-        1: 'Bassa',
-        2: 'Normale',
-        3: 'Media',
-        4: 'Alta'
-      };
-
-      // Costruzione Testo Chiaro, Ordinato e Altamente Leggibile
+      // Costruzione Testo Chiaro, Essenziale (Senza Icone e Senza Priorità)
       let bodyText = `ASIM MULTISERVICES SRL — PROGRAMMA INTERVENTI\n`;
-      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      bodyText += `📅  Periodo:    ${periodLabel}\n`;
+      bodyText += `-----------------------------------------------------\n`;
+      bodyText += `Periodo:  ${periodLabel}\n`;
       if (this.activeTechnician && this.activeTechnician !== 'all') {
-        bodyText += `👤  Tecnico:    @${this.activeTechnician}\n`;
+        bodyText += `Tecnico:  @${this.activeTechnician}\n`;
       }
       if (this.activeJobCode && this.activeJobCode !== 'all') {
-        bodyText += `🏷️  Codice:     ${this.activeJobCode}\n`;
+        bodyText += `Codice:   ${this.activeJobCode}\n`;
       }
-      bodyText += `📊  Totale:     ${relevantEvents.length} interventi in programma\n`;
-      bodyText += `🕒  Data:       ${new Date().toLocaleDateString('it-IT')} ore ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`;
-      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      bodyText += `Totale:   ${relevantEvents.length} interventi in programma\n`;
+      bodyText += `Data:     ${new Date().toLocaleDateString('it-IT')} ore ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`;
+      bodyText += `-----------------------------------------------------\n\n`;
 
       let htmlCards = '';
 
@@ -2811,63 +2804,34 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           const dayList = grouped[dateStr];
           dayList.sort((a, b) => a.time.localeCompare(b.time));
 
-          bodyText += `🗓️  ${capitalizedDate} (${dayList.length} ${dayList.length === 1 ? 'intervento' : 'interventi'})\n`;
-          bodyText += `─────────────────────────────────────────────────────\n\n`;
+          bodyText += `${capitalizedDate} (${dayList.length} ${dayList.length === 1 ? 'intervento' : 'interventi'})\n`;
+          bodyText += `-----------------------------------------------------\n\n`;
 
           htmlCards += `
             <div style="margin-top: 18px; margin-bottom: 10px;">
               <div style="background-color: #f1f5f9; padding: 10px 14px; font-weight: 700; font-size: 14px; border-left: 4px solid #0284c7; color: #0f172a; border-radius: 4px;">
-                🗓️ ${capitalizedDate} (${dayList.length} interventi)
+                ${capitalizedDate} (${dayList.length} interventi)
               </div>
             </div>
           `;
 
           dayList.forEach((ev) => {
-            const prio = priorityNames[ev.priority] || 'Normale';
-            const tech = ev.technician || 'Non assegnato';
-            const code = ev.jobCode || 'Intervento';
             const duration = parseFloat(ev.duration) || 1;
             const endTime = this.calculateEndTime(ev.time, duration);
-            const durationLabel = this.formatDuration(duration);
+            const timeRange = (ev.time && endTime) ? `${ev.time} - ${endTime}` : (ev.time || 'Orario non specificato');
+            const tipo = (ev.jobCode && ev.jobCode !== 'Altro') ? ev.jobCode : (ev.clientName || 'Intervento');
+            const address = ev.indirizzo || 'Indirizzo non specificato';
 
-            bodyText += `⏰  ${ev.time} - ${endTime} (${durationLabel})  ▶  ${ev.clientName}\n`;
-            bodyText += `    • Tipo: Codice ${code}  |  Tecnico: @${tech}  |  Priorità: ${prio}  |  Durata: ${durationLabel}\n`;
-            if (ev.indirizzo) {
-              bodyText += `    • 📍 Indirizzo: ${ev.indirizzo}\n`;
-            }
-            if (ev.telefono) {
-              bodyText += `    • 📞 Telefono:  ${ev.telefono}\n`;
-            }
-            if (ev.pdr || ev.matricola) {
-              const pdrTxt = ev.pdr ? `PDR: ${ev.pdr}` : '';
-              const matTxt = ev.matricola ? `Matr: ${ev.matricola}` : '';
-              const joined = [pdrTxt, matTxt].filter(Boolean).join('  —  ');
-              bodyText += `    • 🔢 Dati:      ${joined}\n`;
-            }
-            if (ev.note) {
-              const cleanNote = ev.note.replace(/^NOTE:\s*/i, '').replace(/[\r\n]+/g, ' ').trim();
-              if (cleanNote) {
-                bodyText += `    • 📝 Note:      ${cleanNote}\n`;
-              }
-            }
-            bodyText += `\n`;
+            bodyText += `Ora: ${timeRange}\n`;
+            bodyText += `Tipologia: ${tipo}\n`;
+            bodyText += `Indirizzo: ${address}\n\n`;
 
             htmlCards += `
-              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">
-                  <div>
-                    <span style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">⏰ ${ev.time} - ${endTime} (${durationLabel})</span>
-                    <span style="display: inline-block; background-color: #f1f5f9; color: #475569; font-weight: 600; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">${code}</span>
-                    <strong style="font-size: 14px; color: #0f172a;">${this.escapeHtml(ev.clientName)}</strong>
-                  </div>
-                  <span style="display: inline-block; background-color: #e0f2fe; color: #0369a1; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 999px;">@${this.escapeHtml(tech)}</span>
-                </div>
-                </div>
-                <div style="font-size: 12px; color: #334155; line-height: 1.5;">
-                  ${ev.indirizzo ? `<div>📍 <strong>Indirizzo:</strong> <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.indirizzo)}" style="color: #0284c7; text-decoration: none;" target="_blank">${this.escapeHtml(ev.indirizzo)}</a></div>` : ''}
-                  ${ev.telefono ? `<div>📞 <strong>Telefono:</strong> <a href="tel:${ev.telefono.replace(/[^0-9+]/g, '')}" style="color: #0284c7; text-decoration: none;">${this.escapeHtml(ev.telefono)}</a></div>` : ''}
-                  ${(ev.pdr || ev.matricola) ? `<div>🔢 <strong>Dati:</strong> ${ev.pdr ? `PDR: <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">${ev.pdr}</code>` : ''} ${ev.matricola ? `— Matr: <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">${ev.matricola}</code>` : ''}</div>` : ''}
-                  ${ev.note ? `<div style="color: #64748b; margin-top: 4px;">📝 <em>${this.escapeHtml(ev.note.replace(/^NOTE:\s*/i, '').trim())}</em></div>` : ''}
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <div style="font-size: 13px; color: #0f172a; line-height: 1.6;">
+                  <div><strong>Ora:</strong> <span style="color: #0284c7; font-weight: 600;">${this.escapeHtml(timeRange)}</span></div>
+                  <div><strong>Tipologia:</strong> <span style="background-color: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${this.escapeHtml(tipo)}</span></div>
+                  <div><strong>Indirizzo:</strong> ${this.escapeHtml(address)}</div>
                 </div>
               </div>
             `;
@@ -2875,10 +2839,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         });
       }
 
-      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      bodyText += `🌐 Consulta il calendario interattivo online:\n`;
+      bodyText += `-----------------------------------------------------\n`;
+      bodyText += `Consulta il calendario online:\n`;
       bodyText += `https://casual70.github.io/calendarioASIM/\n\n`;
-      bodyText += `ASIM Multiservices SRL — Gestione e Pianificazione Interventi\n`;
+      bodyText += `ASIM Multiservices SRL\n`;
 
       const fullHtml = `
         <!DOCTYPE html>
@@ -2893,7 +2857,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div style="padding:16px 20px;">
               ${htmlCards}
               <div style="margin-top:20px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:12px; color:#64748b; text-align:center;">
-                🌐 <a href="https://casual70.github.io/calendarioASIM/" style="color:#0284c7; font-weight:600; text-decoration:none;">Apri il calendario interattivo online &rarr;</a>
+                <a href="https://casual70.github.io/calendarioASIM/" style="color:#0284c7; font-weight:600; text-decoration:none;">Apri il calendario online &rarr;</a>
               </div>
             </div>
           </div>
