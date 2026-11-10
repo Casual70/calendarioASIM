@@ -569,13 +569,16 @@
                   </div>
 
                   <div class="asim-form-group full-width">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                      <label for="email-body">Testo Riepilogo Interventi (Corpo Messaggio)</label>
-                      <button type="button" class="asim-btn asim-btn-xs asim-btn-outline" id="email-btn-copy-body" title="Copia negli appunti per incollarlo in qualsiasi email o chat">
-                        📋 Copia Testo
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                      <label for="email-body">Riepilogo Interventi (Corpo Messaggio)</label>
+                      <button type="button" class="asim-btn asim-btn-xs asim-btn-outline" id="email-btn-copy-body" title="Copia riepilogo negli appunti (formattato per Outlook/Gmail)">
+                        📋 Copia Riepilogo
                       </button>
                     </div>
-                    <textarea id="email-body" class="asim-form-input" rows="10" style="font-family: monospace, monospace; font-size: 0.8rem; line-height: 1.45; white-space: pre;"></textarea>
+                    <textarea id="email-body" class="asim-form-input" rows="11" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.85rem; line-height: 1.55; white-space: pre-wrap; background-color: #fbfcfd;"></textarea>
+                    <small style="color: var(--asim-gray-500); font-size: 0.75rem; margin-top: 4px;">
+                      💡 Cliccando su <strong>"Apri nel Client Email"</strong> viene caricato il testo strutturato; con <strong>"Copia Riepilogo"</strong> puoi anche incollare (Ctrl+V) la tabella a colori direttamente in Outlook o Gmail.
+                    </small>
                   </div>
 
                   <div class="asim-form-actions full-width" style="margin-top: 14px;">
@@ -867,12 +870,25 @@
       if (btnCopyBody) {
         btnCopyBody.addEventListener('click', () => {
           const text = root.querySelector('#email-body').value;
+          const html = this._lastGeneratedEmailHtml || text;
           if (text) {
-            navigator.clipboard.writeText(text).then(() => {
-              this.showToast('Testo interventi copiato negli appunti!', 'success');
+            const doCopy = (navigator.clipboard && window.ClipboardItem)
+              ? navigator.clipboard.write([
+                  new ClipboardItem({
+                    'text/plain': new Blob([text], { type: 'text/plain' }),
+                    'text/html': new Blob([html], { type: 'text/html' })
+                  })
+                ])
+              : navigator.clipboard.writeText(text);
+
+            doCopy.then(() => {
+              this.showToast('Riepilogo copiato negli appunti! (Pronto per incolla formattato)', 'success');
               const old = btnCopyBody.textContent;
               btnCopyBody.textContent = '✓ Copiato!';
               setTimeout(() => { btnCopyBody.textContent = old; }, 2000);
+            }).catch(() => {
+              navigator.clipboard.writeText(text);
+              this.showToast('Testo copiato negli appunti!', 'success');
             });
           }
         });
@@ -902,20 +918,31 @@
             localStorage.setItem('asim_last_email_to', to);
           } catch (err) {}
 
+          // Copia sia testo pulito che HTML formattato negli appunti per incolla ricco immediato
+          const html = this._lastGeneratedEmailHtml || body;
           try {
-            navigator.clipboard.writeText(body);
+            if (navigator.clipboard && window.ClipboardItem) {
+              navigator.clipboard.write([
+                new ClipboardItem({
+                  'text/plain': new Blob([body], { type: 'text/plain' }),
+                  'text/html': new Blob([html], { type: 'text/html' })
+                })
+              ]).catch(() => { navigator.clipboard.writeText(body); });
+            } else {
+              navigator.clipboard.writeText(body);
+            }
           } catch (err) {}
 
           const mailtoUri = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
           window.location.href = mailtoUri;
 
-          this.showToast('Client email aperto! Testo copiato anche negli appunti.', 'success');
+          this.showToast('Client email aperto! Testo formattato copiato anche negli appunti.', 'success');
 
           if (this.apiUrl && this.apiUrl !== '') {
             fetch(this.apiUrl + '?action=send_email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to: to, subject: subject, body: body })
+              body: JSON.stringify({ to: to, subject: subject, body: body, html: html })
             }).catch(() => {});
           }
 
@@ -2524,19 +2551,32 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const techSuffix = this.activeTechnician !== 'all' ? ` (@${this.activeTechnician})` : '';
       subjectInput.value = `ASIM Multiservices - Riepilogo Interventi: ${periodLabel}${techSuffix}`;
 
-      // Costruzione Corpo Email Formattato
-      let bodyText = `====================================================\n`;
-      bodyText += `ASIM MULTISERVICES SRL - PIANIFICAZIONE INTERVENTI\n`;
-      bodyText += `====================================================\n`;
-      bodyText += `Periodo di riferimento: ${periodLabel}\n`;
-      bodyText += `Filtro Tecnico: ${this.activeTechnician === 'all' ? 'Tutti i tecnici' : '@' + this.activeTechnician}\n`;
-      bodyText += `Filtro Codice: ${this.activeJobCode === 'all' ? 'Tutti i codici' : this.activeJobCode}\n`;
-      bodyText += `Totale Interventi: ${relevantEvents.length}\n`;
-      bodyText += `Generato il: ${new Date().toLocaleString('it-IT')}\n`;
-      bodyText += `----------------------------------------------------\n\n`;
+      const priorityNames = {
+        1: 'Bassa',
+        2: 'Normale',
+        3: 'Media',
+        4: 'Alta'
+      };
+
+      // Costruzione Testo Chiaro, Ordinato e Altamente Leggibile
+      let bodyText = `ASIM MULTISERVICES SRL — PROGRAMMA INTERVENTI\n`;
+      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      bodyText += `📅  Periodo:    ${periodLabel}\n`;
+      if (this.activeTechnician && this.activeTechnician !== 'all') {
+        bodyText += `👤  Tecnico:    @${this.activeTechnician}\n`;
+      }
+      if (this.activeJobCode && this.activeJobCode !== 'all') {
+        bodyText += `🏷️  Codice:     ${this.activeJobCode}\n`;
+      }
+      bodyText += `📊  Totale:     ${relevantEvents.length} interventi in programma\n`;
+      bodyText += `🕒  Data:       ${new Date().toLocaleDateString('it-IT')} ore ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`;
+      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+      let htmlCards = '';
 
       if (relevantEvents.length === 0) {
-        bodyText += `Nessun intervento programmato per il periodo e i filtri selezionati.\n\n`;
+        bodyText += `Nessun intervento programmato per il periodo selezionato.\n\n`;
+        htmlCards = `<div style="padding: 24px; text-align: center; color: #64748b;">Nessun intervento programmato per il periodo selezionato.</div>`;
       } else {
         const grouped = {};
         relevantEvents.forEach(ev => {
@@ -2553,34 +2593,100 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             day: 'numeric',
             month: 'long',
             year: 'numeric'
-          }).toUpperCase();
+          });
+          const capitalizedDate = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
 
           const dayList = grouped[dateStr];
           dayList.sort((a, b) => a.time.localeCompare(b.time));
 
-          bodyText += `📅 ${dateFormatted} (${dayList.length} interventi):\n`;
-          bodyText += `----------------------------------------------------\n`;
+          bodyText += `🗓️  ${capitalizedDate} (${dayList.length} ${dayList.length === 1 ? 'intervento' : 'interventi'})\n`;
+          bodyText += `─────────────────────────────────────────────────────\n\n`;
 
-          dayList.forEach((ev, idx) => {
-            bodyText += `${idx + 1}) ORE ${ev.time} | COD: [${ev.jobCode || 'N/D'}] | PRIORITÀ: ${ev.priority || 2}\n`;
-            bodyText += `   Cliente:   ${ev.clientName}\n`;
-            bodyText += `   Tecnico:   @${ev.technician || 'Non assegnato'}\n`;
-            if (ev.indirizzo) bodyText += `   Indirizzo: ${ev.indirizzo}\n`;
-            if (ev.telefono)  bodyText += `   Telefono:  ${ev.telefono}\n`;
-            if (ev.pdr)       bodyText += `   PDR:       ${ev.pdr}\n`;
-            if (ev.matricola) bodyText += `   Matricola: ${ev.matricola}\n`;
-            if (ev.note)      bodyText += `   Note:      ${ev.note.replace(/\n/g, ' ')}\n`;
+          htmlCards += `
+            <div style="margin-top: 18px; margin-bottom: 10px;">
+              <div style="background-color: #f1f5f9; padding: 10px 14px; font-weight: 700; font-size: 14px; border-left: 4px solid #0284c7; color: #0f172a; border-radius: 4px;">
+                🗓️ ${capitalizedDate} (${dayList.length} interventi)
+              </div>
+            </div>
+          `;
+
+          dayList.forEach((ev) => {
+            const prio = priorityNames[ev.priority] || 'Normale';
+            const tech = ev.technician || 'Non assegnato';
+            const code = ev.jobCode || 'Intervento';
+
+            bodyText += `⏰  ${ev.time}  ▶  ${ev.clientName}\n`;
+            bodyText += `    • Tipo: Codice ${code}  |  Tecnico: @${tech}  |  Priorità: ${prio}\n`;
+            if (ev.indirizzo) {
+              bodyText += `    • 📍 Indirizzo: ${ev.indirizzo}\n`;
+            }
+            if (ev.telefono) {
+              bodyText += `    • 📞 Telefono:  ${ev.telefono}\n`;
+            }
+            if (ev.pdr || ev.matricola) {
+              const pdrTxt = ev.pdr ? `PDR: ${ev.pdr}` : '';
+              const matTxt = ev.matricola ? `Matr: ${ev.matricola}` : '';
+              const joined = [pdrTxt, matTxt].filter(Boolean).join('  —  ');
+              bodyText += `    • 🔢 Dati:      ${joined}\n`;
+            }
+            if (ev.note) {
+              const cleanNote = ev.note.replace(/^NOTE:\s*/i, '').replace(/[\r\n]+/g, ' ').trim();
+              if (cleanNote) {
+                bodyText += `    • 📝 Note:      ${cleanNote}\n`;
+              }
+            }
             bodyText += `\n`;
-          });
 
-          bodyText += `\n`;
+            htmlCards += `
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">
+                  <div>
+                    <span style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">⏰ ${ev.time}</span>
+                    <span style="display: inline-block; background-color: #f1f5f9; color: #475569; font-weight: 600; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">${code}</span>
+                    <strong style="font-size: 14px; color: #0f172a;">${this.escapeHtml(ev.clientName)}</strong>
+                  </div>
+                  <span style="display: inline-block; background-color: #e0f2fe; color: #0369a1; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 999px;">@${this.escapeHtml(tech)}</span>
+                </div>
+                <div style="font-size: 12px; color: #334155; line-height: 1.5;">
+                  ${ev.indirizzo ? `<div>📍 <strong>Indirizzo:</strong> <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.indirizzo)}" style="color: #0284c7; text-decoration: none;" target="_blank">${this.escapeHtml(ev.indirizzo)}</a></div>` : ''}
+                  ${ev.telefono ? `<div>📞 <strong>Telefono:</strong> <a href="tel:${ev.telefono.replace(/[^0-9+]/g, '')}" style="color: #0284c7; text-decoration: none;">${this.escapeHtml(ev.telefono)}</a></div>` : ''}
+                  ${(ev.pdr || ev.matricola) ? `<div>🔢 <strong>Dati:</strong> ${ev.pdr ? `PDR: <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">${ev.pdr}</code>` : ''} ${ev.matricola ? `— Matr: <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">${ev.matricola}</code>` : ''}</div>` : ''}
+                  ${ev.note ? `<div style="color: #64748b; margin-top: 4px;">📝 <em>${this.escapeHtml(ev.note.replace(/^NOTE:\s*/i, '').trim())}</em></div>` : ''}
+                </div>
+              </div>
+            `;
+          });
         });
       }
 
-      bodyText += `====================================================\n`;
-      bodyText += `Visualizza il calendario interattivo online:\n`;
-      bodyText += `https://casual70.github.io/calendarioASIM/\n`;
-      bodyText += `ASIM Multiservices SRL\n`;
+      bodyText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      bodyText += `🌐 Consulta il calendario interattivo online:\n`;
+      bodyText += `https://casual70.github.io/calendarioASIM/\n\n`;
+      bodyText += `ASIM Multiservices SRL — Gestione e Pianificazione Interventi\n`;
+
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="margin:0; padding:16px; background-color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <div style="max-width:680px; margin:0 auto; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden;">
+            <div style="background-color:#0284c7; color:#ffffff; padding:16px 20px;">
+              <h2 style="margin:0; font-size:18px;">ASIM Multiservices SRL — Programma Interventi</h2>
+              <div style="font-size:13px; opacity:0.95; margin-top:4px;">Periodo: <strong>${periodLabel}</strong> &nbsp;|&nbsp; Totale: <strong>${relevantEvents.length}</strong> interventi</div>
+            </div>
+            <div style="padding:16px 20px;">
+              ${htmlCards}
+              <div style="margin-top:20px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:12px; color:#64748b; text-align:center;">
+                🌐 <a href="https://casual70.github.io/calendarioASIM/" style="color:#0284c7; font-weight:600; text-decoration:none;">Apri il calendario interattivo online &rarr;</a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      this._lastGeneratedEmailText = bodyText;
+      this._lastGeneratedEmailHtml = fullHtml;
 
       bodyTextarea.value = bodyText;
       modal.style.display = 'flex';
