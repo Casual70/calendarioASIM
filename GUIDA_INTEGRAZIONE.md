@@ -56,24 +56,35 @@ Il database Turso è già stato inizializzato e popolato con gli interventi iniz
 ## ✨ Funzionalità Complete
 
 1. **Sincronizzazione Cloud Istantanea**:
-   * Modifica qualsiasi appuntamento (orario, tecnico, note, cliente).
+   * Modifica qualsiasi appuntamento (orario, tecnico, note, cliente, telefono, indirizzo).
    * Sposta gli appuntamenti con il **Drag & Drop** tra i giorni della settimana o del mese.
-   * Crea un **Nuovo Intervento** con il pulsante `+ Nuovo`.
-   * Le modifiche sono memorizzate nel cloud Turso e riflesse istantaneamente su tutti gli altri schermi.
+   * Crea un **Nuovo Intervento** con il pulsante principale `+ Nuovo Intervento` o con il tasto rapido `+` presente su ciascun giorno.
+   * Elimina interventi con conferma di sicurezza (`🗑️ Elimina`).
+   * Le modifiche sono memorizzate nel cloud Turso e riflesse istantaneamente su tutti gli altri schermi grazie al polling automatico in tempo reale.
 
-2. **Stampa Professionale Ottimizzata**:
+2. **Visualizzazione Predefinita a Settimana**:
+   * All'apertura viene mostrata la comoda panoramica settimanale a 7 colonne (Lunedì - Domenica).
+   * Visualizzazione mensile allineata al pixel: ogni colonna ha identica larghezza garantendo perfetto allineamento tra intestazione giorni e celle.
+
+3. **Invio Calendario via Email**:
+   * Pulsante dedicato **`✉️ Invia per Email`** nella barra degli strumenti.
+   * Compila automaticamente il riepilogo testuale completo degli interventi visibili nel periodo selezionato.
+   * Selezione rapida email tecnici o digitazione libera (con memorizzazione dell'ultimo indirizzo inserito).
+   * Invio tramite client di posta predefinito (Outlook, Thunderbird, Mail, Gmail), copia del testo negli appunti e salvataggio PDF allegabile.
+
+4. **Stampa Professionale Ottimizzata**:
    * Cliccando sull'icona della stampante viene stampata **esattamente la visualizzazione selezionata in quel momento** (es. la vista Settimana o Mese).
    * Layout orizzontale (`landscape`), nasconde bottoni e controlli, con testata formale aziendale `ASIM Multiservices SRL`.
 
-3. **Pill Rapidi per Tecnico**:
+5. **Pill Rapidi per Tecnico**:
    * Filtra con 1 clic per vedere solo gli interventi di `@Goracci`, `@Serpolini`, o `Tutti`, con conteggio immediato.
 
-4. **Strumenti per i Tecnici**:
+6. **Strumenti per i Tecnici**:
    * 📍 Pulsante **Google Maps** per avviare il navigatore verso l'indirizzo del cliente.
    * 📞 Pulsante **Chiama** per telefonare direttamente con un tocco.
    * 📋 Pulsanti **Copia PDR** e **Copia Matricola**.
    * 📅 Pulsante **"Visualizza questo giorno nel calendario"**.
 
-5. **Import ed Export**:
+7. **Import ed Export**:
    * Trascina un nuovo file CSV in qualsiasi momento per importare interventi in massa.
    * Esporta in qualsiasi momento il file CSV aggiornato con tutte le modifiche.
