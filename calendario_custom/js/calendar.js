@@ -167,6 +167,118 @@
       await this.loadInitialData();
     }
 
+    // Assicura l'esistenza della colonna duration su Turso DB
+    async ensureTursoSchema() {
+      if (!this.turso.isConfigured()) return;
+      try {
+        await this.turso.execute('ALTER TABLE appointments ADD COLUMN duration REAL DEFAULT 1;');
+      } catch (e) {
+        // Ignora se la colonna esiste già
+      }
+    }
+
+    // Calcola l'orario di fine a partire da start ("HH:MM") e durata in ore (es. 1, 1.5, 2)
+    calculateEndTime(startTime, durationHours) {
+      if (!startTime || !startTime.includes(':')) return '';
+      const parts = startTime.split(':');
+      const startH = parseInt(parts[0], 10) || 0;
+      const startM = parseInt(parts[1], 10) || 0;
+      const dur = parseFloat(durationHours) || 1;
+      const totalMinutes = startH * 60 + startM + Math.round(dur * 60);
+      const endH = Math.floor(totalMinutes / 60) % 24;
+      const endM = totalMinutes % 60;
+      return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    }
+
+    // Formatta la durata per la visualizzazione utente (es. "1 ora", "2 ore", "30 min", "1h 30m")
+    formatDuration(durationHours) {
+      const d = parseFloat(durationHours) || 1;
+      if (d === 1) return '1 ora';
+      if (d === 0.5) return '30 min';
+      if (d === 1.5) return '1h 30m';
+      if (d === 2) return '2 ore';
+      if (d % 1 === 0) return `${d} ore`;
+      const h = Math.floor(d);
+      const m = Math.round((d - h) * 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+
+    // Calcola l'altezza visiva proporzionale per occupare lo spazio nella colonna
+    calculateCardHeight(durationHours) {
+      const d = parseFloat(durationHours) || 1;
+      return Math.max(68, Math.round(d * 85));
+    }
+
+    // Verifica se un orario si sovrappone a un altro evento per lo stesso tecnico
+    findOverlappingEvent(date, time, durationHours, technician, excludeId = null) {
+      if (!technician || technician === 'Non assegnato' || !time || !date) return null;
+      const dur = parseFloat(durationHours) || 1;
+      const partsA = time.split(':');
+      const startA = (parseInt(partsA[0], 10) || 0) * 60 + (parseInt(partsA[1], 10) || 0);
+      const endA = startA + Math.round(dur * 60);
+
+      return this.events.find(ev => {
+        if (excludeId && ev.id === excludeId) return false;
+        if (ev.date !== date) return false;
+        if ((ev.technician || '').toLowerCase() !== technician.toLowerCase()) return false;
+        if (!ev.time) return false;
+
+        const partsB = ev.time.split(':');
+        const startB = (parseInt(partsB[0], 10) || 0) * 60 + (parseInt(partsB[1], 10) || 0);
+        const endB = startB + Math.round((parseFloat(ev.duration) || 1) * 60);
+
+        return (startA < endB && endA > startB);
+      }) || null;
+    }
+
+    // Aggiorna la preview dell'occupazione oraria nel form modale
+    updateOccupyPreview() {
+      const root = this.container;
+      const timeInput = root.querySelector('#edit-time');
+      const durInput = root.querySelector('#edit-duration');
+      const dateInput = root.querySelector('#edit-date');
+      const techInput = root.querySelector('#edit-tech');
+      const startEl = root.querySelector('#preview-start-time');
+      const endEl = root.querySelector('#preview-end-time');
+      const badgeEl = root.querySelector('#preview-duration-badge');
+      const conflictAlert = root.querySelector('#edit-conflict-alert');
+      const conflictMsg = root.querySelector('#conflict-message');
+
+      if (!timeInput || !durInput || !startEl || !endEl || !badgeEl) return;
+
+      const time = timeInput.value || '09:00';
+      const dur = parseFloat(durInput.value) || 1;
+      const endTime = this.calculateEndTime(time, dur);
+      const durLabel = this.formatDuration(dur);
+
+      startEl.textContent = time;
+      endEl.textContent = endTime;
+      badgeEl.textContent = `⏱️ ${durLabel}`;
+
+      root.querySelectorAll('.asim-btn-duration-pill').forEach(pill => {
+        if (parseFloat(pill.dataset.hours) === dur) {
+          pill.classList.add('is-active');
+        } else {
+          pill.classList.remove('is-active');
+        }
+      });
+
+      if (conflictAlert && conflictMsg) {
+        const curId = this.currentModalEvent ? this.currentModalEvent.id : null;
+        const date = dateInput ? dateInput.value : '';
+        const tech = techInput ? techInput.value.trim() : '';
+        const conflict = this.findOverlappingEvent(date, time, dur, tech, curId);
+        if (conflict) {
+          const cDur = parseFloat(conflict.duration) || 1;
+          const cEnd = this.calculateEndTime(conflict.time, cDur);
+          conflictMsg.textContent = `@${conflict.technician} risulta già occupato dalle ${conflict.time} alle ${cEnd} con "${conflict.clientName}".`;
+          conflictAlert.style.display = 'block';
+        } else {
+          conflictAlert.style.display = 'none';
+        }
+      }
+    }
+
     // Costruisce la struttura HTML del calendario
     renderSkeleton() {
       this.container.innerHTML = `
@@ -359,12 +471,13 @@
               <!-- CONTENITORE VISTA (Sola Lettura) -->
               <div id="modal-view-mode">
                 <h2 class="asim-modal-title" id="modal-title">NOME CLIENTE</h2>
-                <div class="asim-modal-datetime" id="modal-datetime">
+                <div class="asim-modal-datetime" id="modal-datetime" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span id="modal-date-text">Lunedì 9 Novembre 2026 alle 09:30</span>
+                  <span class="asim-occupy-badge" id="modal-duration-badge">⏱️ 1 ora</span>
                 </div>
 
                 <div class="asim-modal-body">
@@ -466,8 +579,34 @@
                   </div>
 
                   <div class="asim-form-group">
-                    <label>Orario *</label>
+                    <label>Orario Inizio *</label>
                     <input type="time" id="edit-time" class="asim-form-input" required>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Durata Intervento *</label>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                      <input type="number" id="edit-duration" class="asim-form-input" min="0.5" max="12" step="0.5" value="1" required style="width: 85px;">
+                      <span style="font-size:0.85rem; color:var(--asim-gray-600); font-weight:600;">ore</span>
+                    </div>
+                    <div class="asim-duration-pills" style="display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;">
+                      <button type="button" class="asim-btn-duration-pill" data-hours="0.5">30m</button>
+                      <button type="button" class="asim-btn-duration-pill is-active" data-hours="1">1h</button>
+                      <button type="button" class="asim-btn-duration-pill" data-hours="1.5">1h30</button>
+                      <button type="button" class="asim-btn-duration-pill" data-hours="2">2h</button>
+                      <button type="button" class="asim-btn-duration-pill" data-hours="3">3h</button>
+                      <button type="button" class="asim-btn-duration-pill" data-hours="4">4h</button>
+                    </div>
+                  </div>
+
+                  <div class="asim-form-group full-width asim-occupy-preview-box" id="edit-occupy-preview" style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:8px 12px; margin-top:-6px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; font-size:0.85rem; color:#0369a1; flex-wrap:wrap; gap:6px;">
+                      <span>⏰ <strong>Fascia occupata:</strong> dalle <strong id="preview-start-time">09:30</strong> alle <strong id="preview-end-time">10:30</strong></span>
+                      <span class="asim-occupy-badge" id="preview-duration-badge">⏱️ 1 ora</span>
+                    </div>
+                    <div id="edit-conflict-alert" style="display:none; margin-top:6px; padding:6px 8px; background:#fff1f2; border:1px solid #fecdd3; border-radius:4px; color:#9f1239; font-size:0.8rem;">
+                      ⚠️ <strong>Attenzione sovrapposizione:</strong> <span id="conflict-message"></span>
+                    </div>
                   </div>
 
                   <div class="asim-form-group">
@@ -766,7 +905,26 @@
         }
       });
 
-      // Salva Modifiche Form (Salvataggio Permanente)
+      // Aggiornamento dinamico anteprima orario occupato e pillole durata
+      ['#edit-time', '#edit-duration', '#edit-date', '#edit-tech'].forEach(sel => {
+        const input = root.querySelector(sel);
+        if (input) {
+          input.addEventListener('input', () => this.updateOccupyPreview());
+          input.addEventListener('change', () => this.updateOccupyPreview());
+        }
+      });
+
+      root.querySelectorAll('.asim-btn-duration-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+          e.preventDefault();
+          const durInput = root.querySelector('#edit-duration');
+          if (durInput) {
+            durInput.value = pill.dataset.hours;
+            this.updateOccupyPreview();
+          }
+        });
+      });
+
       // Salva Modifiche Form (Salvataggio Permanente nel Cloud Turso)
       root.querySelector('#asim-edit-form').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -778,6 +936,7 @@
             clientName: root.querySelector('#edit-client').value.trim(),
             date: root.querySelector('#edit-date').value,
             time: root.querySelector('#edit-time').value,
+            duration: parseFloat(root.querySelector('#edit-duration').value) || 1,
             technician: root.querySelector('#edit-tech').value.trim() || 'Non assegnato',
             jobCode: root.querySelector('#edit-code').value.trim() || 'Altro',
             indirizzo: root.querySelector('#edit-address').value.trim(),
@@ -806,6 +965,7 @@
         ev.clientName = root.querySelector('#edit-client').value.trim();
         ev.date = root.querySelector('#edit-date').value;
         ev.time = root.querySelector('#edit-time').value;
+        ev.duration = parseFloat(root.querySelector('#edit-duration').value) || 1;
         ev.technician = root.querySelector('#edit-tech').value.trim() || 'Non assegnato';
         ev.jobCode = root.querySelector('#edit-code').value.trim() || 'Altro';
         ev.indirizzo = root.querySelector('#edit-address').value.trim();
@@ -974,6 +1134,7 @@
       if (this.turso.isConfigured()) {
         this.updateTursoBadge('syncing');
         try {
+          await this.ensureTursoSchema();
           const res = await this.turso.execute('SELECT * FROM appointments ORDER BY date ASC, time ASC;');
           if (res.rows && res.rows.length > 0) {
             this.events = this.mapTursoRowsToEvents(res.rows);
@@ -1130,7 +1291,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           if (actionType === 'delete' && modifiedEvent) {
             await this.turso.execute('DELETE FROM appointments WHERE id = ?;', [modifiedEvent.id]);
           } else if (modifiedEvent) {
-            const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+            const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
             await this.turso.execute(sql, [
               modifiedEvent.id,
               modifiedEvent.clientName,
@@ -1138,6 +1299,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               modifiedEvent.technician || 'Non assegnato',
               modifiedEvent.date,
               modifiedEvent.time,
+              modifiedEvent.duration || 1,
               modifiedEvent.priority || 2,
               modifiedEvent.pdr || '',
               modifiedEvent.matricola || '',
@@ -1174,7 +1336,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (!this.turso.isConfigured() || !events || events.length === 0) return;
       try {
         const statements = events.map(ev => ({
-          sql: `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`,
+          sql: `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`,
           args: [
             ev.id,
             ev.clientName,
@@ -1182,6 +1344,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             ev.technician || 'Non assegnato',
             ev.date,
             ev.time,
+            ev.duration || 1,
             ev.priority || 2,
             ev.pdr || '',
             ev.matricola || '',
@@ -1219,6 +1382,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           author: r.author || 'Sistema',
           date: r.date,
           time: r.time,
+          duration: (r.duration !== null && r.duration !== undefined) ? (parseFloat(r.duration) || 1) : 1,
           dateTime: dt,
           hasSpecificTime: Boolean(r.time),
           pdr: r.pdr || '',
@@ -1418,8 +1582,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         clientName = rawContent;
       }
 
-      // 5. Parsa Data e Ora
+      // 5. Parsa Data, Ora e Durata
       const parsedDateTime = this.parseDateString(rawDate);
+      const rawDuration = parseFloat(row['DURATION']) || 1;
 
       return {
         id: 'task_' + index + '_' + Math.random().toString(36).substr(2, 6),
@@ -1431,6 +1596,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         author: author,
         date: parsedDateTime.isoDate, // YYYY-MM-DD
         time: parsedDateTime.time,    // HH:MM
+        duration: rawDuration,
         dateTime: parsedDateTime.fullDate, // Oggetto Date
         hasSpecificTime: parsedDateTime.hasTime,
         rawDate: rawDate,
@@ -1835,9 +2001,12 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         const maxVisible = 3;
         dayEvents.slice(0, maxVisible).forEach(ev => {
           const colors = this.getTechColor(ev.technician);
+          const duration = parseFloat(ev.duration) || 1;
+          const endTime = this.calculateEndTime(ev.time, duration);
+          const timeLabel = duration > 1 ? `${ev.time}-${endTime}` : ev.time;
           html += `
-            <div class="asim-event-chip" draggable="true" data-id="${ev.id}" style="background-color: ${colors.bg}; color: ${colors.text}; border-left-color: ${colors.border};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)}">
-              <span class="asim-chip-time">${ev.time}</span>
+            <div class="asim-event-chip" draggable="true" data-id="${ev.id}" style="background-color: ${colors.bg}; color: ${colors.text}; border-left-color: ${colors.border};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (${ev.time} - ${endTime}, durata ${this.formatDuration(duration)})">
+              <span class="asim-chip-time">${timeLabel}</span>
               <span class="asim-chip-code">${ev.jobCode}</span>
               <span class="asim-chip-name">${this.escapeHtml(ev.clientName)}</span>
             </div>
@@ -1989,20 +2158,33 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         `;
 
         if (dayEvents.length === 0) {
-          html += `<div class="asim-empty-day">Nessun intervento</div>`;
           html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
           dayEvents.forEach(ev => {
             const colors = this.getTechColor(ev.technician);
+            const duration = parseFloat(ev.duration) || 1;
+            const endTime = this.calculateEndTime(ev.time, duration);
+            const cardHeight = this.calculateCardHeight(duration);
+            const durationLabel = this.formatDuration(duration);
+            const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
             html += `
-              <div class="asim-card-event" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border};" title="Trascina per spostare di giorno">
-                <div class="asim-card-top">
-                  <span class="asim-card-time">${ev.time}</span>
-                  <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
+              <div class="asim-card-event ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight}px;" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
+                <div>
+                  <div class="asim-card-top">
+                    <span class="asim-card-time">${ev.time} - ${endTime}</span>
+                    <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
+                  </div>
+                  <div class="asim-card-title">${this.escapeHtml(ev.clientName)}</div>
+                  <div class="asim-card-tech" style="color: ${colors.text};">
+                    @${ev.technician}
+                    ${hasConflict ? `<span class="asim-card-conflict-badge" title="Attenzione: sovrapposizione oraria per questo tecnico">⚠️ Conflitto</span>` : ''}
+                  </div>
+                  ${ev.indirizzo ? `<div class="asim-card-addr">📍 ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
                 </div>
-                <div class="asim-card-title">${this.escapeHtml(ev.clientName)}</div>
-                <div class="asim-card-tech" style="color: ${colors.text};">@${ev.technician}</div>
-                ${ev.indirizzo ? `<div class="asim-card-addr">📍 ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
+                <div class="asim-card-occupy-bar">
+                  <span class="asim-occupy-badge">⏱️ ${durationLabel}</span>
+                  <span class="asim-occupy-span">${ev.time} ➔ ${endTime}</span>
+                </div>
               </div>
             `;
           });
@@ -2132,24 +2314,40 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         html += `<div class="asim-day-timeline">`;
         dayEvents.forEach(ev => {
           const colors = this.getTechColor(ev.technician);
+          const duration = parseFloat(ev.duration) || 1;
+          const endTime = this.calculateEndTime(ev.time, duration);
+          const cardHeight = this.calculateCardHeight(duration);
+          const durationLabel = this.formatDuration(duration);
+          const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
           html += `
             <div class="asim-timeline-item" data-id="${ev.id}">
-              <div class="asim-timeline-time">${ev.time}</div>
-              <div class="asim-timeline-card" style="border-left-color: ${colors.border};">
-                <div class="asim-card-header-row">
-                  <div class="asim-card-title-group">
-                    <span class="asim-badge asim-badge-code">${ev.jobCode}</span>
-                    <strong class="asim-card-client">${this.escapeHtml(ev.clientName)}</strong>
+              <div class="asim-timeline-time">
+                <div style="font-weight:700; color:#0f172a; font-size:0.95rem;">${ev.time}</div>
+                <div style="font-size:0.75rem; color:#0284c7; font-weight:600; margin:3px 0;">↓ ${durationLabel}</div>
+                <div style="font-weight:600; color:#64748b; font-size:0.85rem;">${endTime}</div>
+              </div>
+              <div class="asim-timeline-card ${hasConflict ? 'asim-card-conflict' : ''}" style="border-left-color: ${colors.border}; min-height: ${cardHeight}px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div class="asim-card-header-row">
+                    <div class="asim-card-title-group">
+                      <span class="asim-badge asim-badge-code">${ev.jobCode}</span>
+                      <strong class="asim-card-client">${this.escapeHtml(ev.clientName)}</strong>
+                      ${hasConflict ? `<span class="asim-card-conflict-badge">⚠️ Sovrapposizione oraria</span>` : ''}
+                    </div>
+                    <span class="asim-badge asim-badge-tech" style="background:${colors.bg}; color:${colors.text}; border-color:${colors.border}">
+                      @${ev.technician}
+                    </span>
                   </div>
-                  <span class="asim-badge asim-badge-tech" style="background:${colors.bg}; color:${colors.text}; border-color:${colors.border}">
-                    @${ev.technician}
-                  </span>
+                  <div class="asim-timeline-details">
+                    ${ev.indirizzo ? `<div><strong>📍 Indirizzo:</strong> ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
+                    ${ev.telefono ? `<div><strong>📞 Telefono:</strong> <a href="tel:${ev.telefono}">${ev.telefono}</a></div>` : ''}
+                    ${ev.pdr ? `<div><strong>PDR:</strong> <code>${ev.pdr}</code></div>` : ''}
+                    ${ev.matricola ? `<div><strong>Matricola:</strong> <code>${ev.matricola}</code></div>` : ''}
+                  </div>
                 </div>
-                <div class="asim-timeline-details">
-                  ${ev.indirizzo ? `<div><strong>📍 Indirizzo:</strong> ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
-                  ${ev.telefono ? `<div><strong>📞 Telefono:</strong> <a href="tel:${ev.telefono}">${ev.telefono}</a></div>` : ''}
-                  ${ev.pdr ? `<div><strong>PDR:</strong> <code>${ev.pdr}</code></div>` : ''}
-                  ${ev.matricola ? `<div><strong>Matricola:</strong> <code>${ev.matricola}</code></div>` : ''}
+                <div class="asim-card-occupy-bar" style="margin-top:10px;">
+                  <span class="asim-occupy-badge">⏱️ Durata: ${durationLabel}</span>
+                  <span class="asim-occupy-span">Fascia oraria occupata: ${ev.time} ➔ ${endTime}</span>
                 </div>
               </div>
             </div>
@@ -2219,7 +2417,6 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
         html += `
           <div class="asim-list-date-group">
-            <h4 class="asim-list-date-title">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <h4 class="asim-list-date-title" style="margin:0;">${formattedDate} <span class="asim-count">(${dateEvents.length})</span></h4>
               <button class="asim-col-add-btn" data-date="${dateStr}" title="Aggiungi intervento per questo giorno">+</button>
@@ -2229,12 +2426,16 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
         dateEvents.forEach(ev => {
           const colors = this.getTechColor(ev.technician);
+          const duration = parseFloat(ev.duration) || 1;
+          const endTime = this.calculateEndTime(ev.time, duration);
+          const durationLabel = this.formatDuration(duration);
           html += `
             <div class="asim-list-card" data-id="${ev.id}">
               <div class="asim-list-card-main">
                 <div class="asim-list-card-header">
                   <span class="asim-badge asim-badge-code">${ev.jobCode}</span>
-                  <span class="asim-list-card-time">${ev.time}</span>
+                  <span class="asim-list-card-time">${ev.time} - ${endTime}</span>
+                  <span class="asim-occupy-badge" style="font-size:0.65rem;">⏱️ ${durationLabel}</span>
                   <h3 class="asim-list-card-title">${this.escapeHtml(ev.clientName)}</h3>
                   <span class="asim-badge asim-badge-tech" style="background:${colors.bg}; color:${colors.text}; border-color:${colors.border}">
                     @${ev.technician}
@@ -2309,6 +2510,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-client').value = '';
       root.querySelector('#edit-date').value = defaultDate || this.formatISODate(this.selectedDate);
       root.querySelector('#edit-time').value = '09:30';
+      root.querySelector('#edit-duration').value = '1';
       root.querySelector('#edit-tech').value = (this.activeTechnician && this.activeTechnician !== 'all') ? this.activeTechnician : '';
       root.querySelector('#edit-code').value = (this.activeJobCode && this.activeJobCode !== 'all') ? this.activeJobCode : 'A01';
       root.querySelector('#edit-address').value = '';
@@ -2317,6 +2519,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-pdr').value = '';
       root.querySelector('#edit-matricola').value = '';
       root.querySelector('#edit-notes').value = '';
+
+      this.updateOccupyPreview();
 
       const datalist = root.querySelector('#edit-tech-datalist');
       if (datalist) {
@@ -2382,7 +2586,12 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         month: 'long',
         year: 'numeric'
       });
-      this.container.querySelector('#modal-date-text').textContent = `${dateFormatted} alle ${ev.time}`;
+      const duration = parseFloat(ev.duration) || 1;
+      const endTime = this.calculateEndTime(ev.time, duration);
+      const durationLabel = this.formatDuration(duration);
+      this.container.querySelector('#modal-date-text').textContent = `${dateFormatted} dalle ${ev.time} alle ${endTime}`;
+      const durBadge = this.container.querySelector('#modal-duration-badge');
+      if (durBadge) durBadge.textContent = `⏱️ ${durationLabel}`;
 
       // Indirizzo
       const addrRow = this.container.querySelector('#modal-addr-row');
@@ -2456,6 +2665,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-client').value = ev.clientName || '';
       root.querySelector('#edit-date').value = ev.date || '';
       root.querySelector('#edit-time').value = ev.time || '09:00';
+      root.querySelector('#edit-duration').value = String(ev.duration || 1);
       root.querySelector('#edit-tech').value = ev.technician || '';
       root.querySelector('#edit-code').value = ev.jobCode || '';
       root.querySelector('#edit-address').value = ev.indirizzo || '';
@@ -2464,6 +2674,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-pdr').value = ev.pdr || '';
       root.querySelector('#edit-matricola').value = ev.matricola || '';
       root.querySelector('#edit-notes').value = ev.note || '';
+
+      this.updateOccupyPreview();
 
       const datalist = root.querySelector('#edit-tech-datalist');
       if (datalist) {
@@ -2614,9 +2826,12 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             const prio = priorityNames[ev.priority] || 'Normale';
             const tech = ev.technician || 'Non assegnato';
             const code = ev.jobCode || 'Intervento';
+            const duration = parseFloat(ev.duration) || 1;
+            const endTime = this.calculateEndTime(ev.time, duration);
+            const durationLabel = this.formatDuration(duration);
 
-            bodyText += `⏰  ${ev.time}  ▶  ${ev.clientName}\n`;
-            bodyText += `    • Tipo: Codice ${code}  |  Tecnico: @${tech}  |  Priorità: ${prio}\n`;
+            bodyText += `⏰  ${ev.time} - ${endTime} (${durationLabel})  ▶  ${ev.clientName}\n`;
+            bodyText += `    • Tipo: Codice ${code}  |  Tecnico: @${tech}  |  Priorità: ${prio}  |  Durata: ${durationLabel}\n`;
             if (ev.indirizzo) {
               bodyText += `    • 📍 Indirizzo: ${ev.indirizzo}\n`;
             }
@@ -2641,11 +2856,12 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">
                   <div>
-                    <span style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">⏰ ${ev.time}</span>
+                    <span style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">⏰ ${ev.time} - ${endTime} (${durationLabel})</span>
                     <span style="display: inline-block; background-color: #f1f5f9; color: #475569; font-weight: 600; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">${code}</span>
                     <strong style="font-size: 14px; color: #0f172a;">${this.escapeHtml(ev.clientName)}</strong>
                   </div>
                   <span style="display: inline-block; background-color: #e0f2fe; color: #0369a1; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 999px;">@${this.escapeHtml(tech)}</span>
+                </div>
                 </div>
                 <div style="font-size: 12px; color: #334155; line-height: 1.5;">
                   ${ev.indirizzo ? `<div>📍 <strong>Indirizzo:</strong> <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.indirizzo)}" style="color: #0284c7; text-decoration: none;" target="_blank">${this.escapeHtml(ev.indirizzo)}</a></div>` : ''}

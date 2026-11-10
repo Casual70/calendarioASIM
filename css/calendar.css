@@ -637,11 +637,78 @@
   box-shadow: var(--asim-shadow-sm);
   cursor: pointer;
   transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .asim-card-event:hover {
   box-shadow: var(--asim-shadow-md);
   transform: translateY(-2px);
+}
+
+.asim-card-occupy-bar {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--asim-gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--asim-gray-500);
+}
+
+.asim-occupy-badge {
+  font-weight: 600;
+  color: #0284c7;
+  background-color: #f0f9ff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid #bae6fd;
+  white-space: nowrap;
+}
+
+.asim-occupy-span {
+  font-size: 0.65rem;
+  color: var(--asim-gray-400);
+  white-space: nowrap;
+}
+
+.asim-card-conflict {
+  border: 2px dashed #f43f5e !important;
+  background-color: #fff1f2 !important;
+}
+
+.asim-card-conflict-badge {
+  display: inline-block;
+  background-color: #ffe4e6;
+  color: #e11d48;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  border: 1px solid #fecdd3;
+}
+
+.asim-btn-duration-pill {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--asim-gray-300);
+  background: #ffffff;
+  color: var(--asim-gray-700);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.asim-btn-duration-pill:hover,
+.asim-btn-duration-pill.is-active {
+  background-color: var(--asim-primary);
+  color: #ffffff;
+  border-color: var(--asim-primary);
 }
 
 .asim-card-top {
