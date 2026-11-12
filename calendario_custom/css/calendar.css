@@ -575,7 +575,7 @@
    ---------------------------------------------------- */
 .asim-week-container {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   width: 100%;
   box-sizing: border-box;
   background-color: var(--asim-gray-200);
@@ -746,11 +746,87 @@
   text-overflow: ellipsis;
 }
 
+.asim-card-note {
+  font-size: 0.68rem;
+  color: #334155;
+  background-color: #f8fafc;
+  border-left: 2px solid #0284c7;
+  padding: 3px 6px;
+  border-radius: 3px;
+  margin-top: 4px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.asim-badge-day-tag {
+  display: inline-block;
+  background-color: #f1f5f9;
+  color: #0369a1;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-right: 3px;
+  border: 1px solid #bae6fd;
+}
+
+.asim-weekend-header-actions {
+  position: absolute;
+  top: 7px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.asim-col-add-weekend {
+  position: static !important;
+  width: auto !important;
+  height: 22px !important;
+  padding: 0 6px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  border-radius: 999px !important;
+}
+
+.asim-weekend-subhead {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--asim-gray-600);
+  background-color: var(--asim-gray-100);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 4px 0 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-left: 3px solid var(--asim-primary);
+}
+
+.asim-weekend-count {
+  font-size: 0.65rem;
+  background-color: var(--asim-gray-200);
+  color: var(--asim-gray-700);
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
 .asim-empty-day {
   font-size: 0.75rem;
   color: var(--asim-gray-400);
   text-align: center;
   padding: 24px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.asim-empty-day:hover {
+  color: var(--asim-primary);
+  background-color: #f0f9ff;
+  border-radius: 4px;
 }
 
 /* ----------------------------------------------------
@@ -1608,10 +1684,10 @@
     print-color-adjust: exact !important;
   }
 
-  /* Griglia Settimanale ottimizzata a 7 colonne su pagina orizzontale */
+  /* Griglia Settimanale ottimizzata a 6 colonne (Lun-Ven + Weekend accorpato) su pagina orizzontale */
   .asim-week-container {
     display: grid !important;
-    grid-template-columns: repeat(7, 1fr) !important;
+    grid-template-columns: repeat(6, 1fr) !important;
     gap: 4px !important;
     background: transparent !important;
   }

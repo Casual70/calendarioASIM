@@ -2117,7 +2117,40 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
-    // Vista Settimana (7 colonne)
+    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili)
+    renderWeekCardHtml(ev, dayTag = '') {
+      const colors = this.getTechColor(ev.technician);
+      const duration = parseFloat(ev.duration) || 1;
+      const endTime = this.calculateEndTime(ev.time, duration);
+      const cardHeight = this.calculateCardHeight(duration);
+      const durationLabel = this.formatDuration(duration);
+      const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
+      const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
+
+      return `
+        <div class="asim-card-event ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight}px;" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
+          <div>
+            <div class="asim-card-top">
+              <span class="asim-card-time">${dayTag ? `<span class="asim-badge-day-tag">${dayTag}</span> ` : ''}${ev.time} - ${endTime}</span>
+              <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
+            </div>
+            <div class="asim-card-title">${this.escapeHtml(ev.clientName)}</div>
+            <div class="asim-card-tech" style="color: ${colors.text};">
+              @${ev.technician}
+              ${hasConflict ? `<span class="asim-card-conflict-badge" title="Attenzione: sovrapposizione oraria per questo tecnico">⚠️ Conflitto</span>` : ''}
+            </div>
+            ${ev.indirizzo ? `<div class="asim-card-addr">📍 ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
+            ${cleanNote ? `<div class="asim-card-note" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</div>` : ''}
+          </div>
+          <div class="asim-card-occupy-bar">
+            <span class="asim-occupy-badge">⏱️ ${durationLabel}</span>
+            <span class="asim-occupy-span">${ev.time} ➔ ${endTime}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Vista Settimana (6 colonne: Lun-Ven + Sabato/Domenica unificati per guadagnare spazio)
     renderWeekView(container, labelElement, filteredEvents) {
       const cur = new Date(this.selectedDate);
       let dayOfWeek = cur.getDay() - 1;
@@ -2126,7 +2159,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const startOfWeek = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - dayOfWeek);
       const endOfWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 6);
 
-      const dayNames = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      const dayNames = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì'];
       const todayIso = this.formatISODate(new Date());
 
       labelElement.textContent = `Settimana ${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()}`;
@@ -2140,7 +2173,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       let html = `<div class="asim-week-container">`;
 
-      for (let i = 0; i < 7; i++) {
+      // 1. Colonne feriali da Lunedì a Venerdì (5 colonne spaziose)
+      for (let i = 0; i < 5; i++) {
         const d = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + i);
         const iso = this.formatISODate(d);
         const isToday = iso === todayIso;
@@ -2161,32 +2195,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
           dayEvents.forEach(ev => {
-            const colors = this.getTechColor(ev.technician);
-            const duration = parseFloat(ev.duration) || 1;
-            const endTime = this.calculateEndTime(ev.time, duration);
-            const cardHeight = this.calculateCardHeight(duration);
-            const durationLabel = this.formatDuration(duration);
-            const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
-            html += `
-              <div class="asim-card-event ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight}px;" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
-                <div>
-                  <div class="asim-card-top">
-                    <span class="asim-card-time">${ev.time} - ${endTime}</span>
-                    <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
-                  </div>
-                  <div class="asim-card-title">${this.escapeHtml(ev.clientName)}</div>
-                  <div class="asim-card-tech" style="color: ${colors.text};">
-                    @${ev.technician}
-                    ${hasConflict ? `<span class="asim-card-conflict-badge" title="Attenzione: sovrapposizione oraria per questo tecnico">⚠️ Conflitto</span>` : ''}
-                  </div>
-                  ${ev.indirizzo ? `<div class="asim-card-addr">📍 ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
-                </div>
-                <div class="asim-card-occupy-bar">
-                  <span class="asim-occupy-badge">⏱️ ${durationLabel}</span>
-                  <span class="asim-occupy-span">${ev.time} ➔ ${endTime}</span>
-                </div>
-              </div>
-            `;
+            html += this.renderWeekCardHtml(ev);
           });
         }
 
@@ -2195,6 +2204,64 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           </div>
         `;
       }
+
+      // 2. Colonna 6: Sabato e Domenica integrati nello stesso giorno per massimizzare lo spazio
+      const dSat = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 5);
+      const dSun = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 6);
+      const isoSat = this.formatISODate(dSat);
+      const isoSun = this.formatISODate(dSun);
+      const isTodaySat = isoSat === todayIso;
+      const isTodaySun = isoSun === todayIso;
+      const satEvents = eventsByDate[isoSat] || [];
+      const sunEvents = eventsByDate[isoSun] || [];
+      satEvents.sort((a, b) => a.time.localeCompare(b.time));
+      sunEvents.sort((a, b) => a.time.localeCompare(b.time));
+      const totalWeekendEvents = satEvents.length + sunEvents.length;
+
+      html += `
+        <div class="asim-week-col asim-week-col-weekend ${isTodaySat || isTodaySun ? 'is-today' : ''}" data-date="${isoSat}">
+          <div class="asim-week-col-header">
+            <span class="asim-week-day-name">Sabato / Domenica</span>
+            <span class="asim-week-day-num">${dSat.getDate()} - ${dSun.getDate()}</span>
+            <div class="asim-weekend-header-actions">
+              <button class="asim-col-add-btn asim-col-add-weekend" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()}">+Sab</button>
+              <button class="asim-col-add-btn asim-col-add-weekend" data-date="${isoSun}" title="Aggiungi intervento per Domenica ${dSun.getDate()}">+Dom</button>
+            </div>
+          </div>
+          <div class="asim-week-col-body">
+      `;
+
+      if (totalWeekendEvents === 0) {
+        html += `<div class="asim-empty-day" data-date="${isoSat}" title="Clicca per aggiungere un intervento">+ Nessun intervento nel weekend</div>`;
+      } else {
+        if (satEvents.length > 0) {
+          html += `
+            <div class="asim-weekend-subhead" data-date="${isoSat}">
+              <span>Sabato ${dSat.getDate()}</span>
+              <span class="asim-weekend-count">${satEvents.length}</span>
+            </div>
+          `;
+          satEvents.forEach(ev => {
+            html += this.renderWeekCardHtml(ev, 'Sab');
+          });
+        }
+        if (sunEvents.length > 0) {
+          html += `
+            <div class="asim-weekend-subhead" data-date="${isoSun}">
+              <span>Domenica ${dSun.getDate()}</span>
+              <span class="asim-weekend-count">${sunEvents.length}</span>
+            </div>
+          `;
+          sunEvents.forEach(ev => {
+            html += this.renderWeekCardHtml(ev, 'Dom');
+          });
+        }
+      }
+
+      html += `
+          </div>
+        </div>
+      `;
 
       html += `</div>`;
       container.innerHTML = html;
@@ -2217,7 +2284,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         });
       });
 
-      // Drop sulle colonne della settimana
+      // Drop sulle colonne della settimana e sulle sezioni weekend
       container.querySelectorAll('.asim-week-col').forEach(col => {
         col.addEventListener('dragover', (e) => {
           e.preventDefault();
@@ -2234,7 +2301,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           e.preventDefault();
           col.classList.remove('drag-over');
           const eventId = e.dataTransfer.getData('text/plain');
-          const targetDate = col.dataset.date;
+          const targetEl = e.target.closest('[data-date]') || col;
+          const targetDate = targetEl.dataset.date || col.dataset.date;
           if (eventId && targetDate) {
             const ev = this.events.find(x => x.id === eventId);
             if (ev && ev.date !== targetDate) {
@@ -2250,13 +2318,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         });
       });
 
-      // Aggiungi intervento da colonna settimana (+)
-      container.querySelectorAll('.asim-col-add-btn').forEach(btn => {
+      // Aggiungi intervento da colonna settimana (+), da weekend o da cella vuota
+      container.querySelectorAll('.asim-col-add-btn, .asim-empty-day').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           this.openCreateMode(btn.dataset.date);
         });
       });
+    }
 
       // Clic su "Nessun intervento" per aggiungere rapidamente
       container.querySelectorAll('.asim-empty-day').forEach(emptyEl => {
@@ -2821,10 +2890,15 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             const timeRange = (ev.time && endTime) ? `${ev.time} - ${endTime}` : (ev.time || 'Orario non specificato');
             const tipo = (ev.jobCode && ev.jobCode !== 'Altro') ? ev.jobCode : (ev.clientName || 'Intervento');
             const address = ev.indirizzo || 'Indirizzo non specificato';
+            const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').replace(/[\r\n]+/g, ' ').trim() : '';
 
             bodyText += `Ora: ${timeRange}\n`;
             bodyText += `Tipologia: ${tipo}\n`;
-            bodyText += `Indirizzo: ${address}\n\n`;
+            bodyText += `Indirizzo: ${address}\n`;
+            if (cleanNote) {
+              bodyText += `Note: ${cleanNote}\n`;
+            }
+            bodyText += `\n`;
 
             htmlCards += `
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
@@ -2832,6 +2906,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
                   <div><strong>Ora:</strong> <span style="color: #0284c7; font-weight: 600;">${this.escapeHtml(timeRange)}</span></div>
                   <div><strong>Tipologia:</strong> <span style="background-color: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${this.escapeHtml(tipo)}</span></div>
                   <div><strong>Indirizzo:</strong> ${this.escapeHtml(address)}</div>
+                  ${cleanNote ? `<div style="margin-top: 4px; color: #475569;"><strong>Note:</strong> <em>${this.escapeHtml(cleanNote)}</em></div>` : ''}
                 </div>
               </div>
             `;
