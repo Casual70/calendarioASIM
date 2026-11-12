@@ -2327,14 +2327,6 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
-      // Clic su "Nessun intervento" per aggiungere rapidamente
-      container.querySelectorAll('.asim-empty-day').forEach(emptyEl => {
-        emptyEl.addEventListener('click', () => {
-          this.openCreateMode(emptyEl.dataset.date);
-        });
-      });
-    }
-
     // Vista Giorno (Cronologica con orari)
     renderDayView(container, labelElement, filteredEvents) {
       const year = this.selectedDate.getFullYear();
