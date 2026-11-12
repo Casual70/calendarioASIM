@@ -2444,18 +2444,92 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
-    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili)
-    renderWeekCardHtml(ev, dayTag = '') {
+    // Converte una stringa orario "HH:MM" in minuti totali dalla mezzanotte
+    timeToMinutes(timeStr) {
+      if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return 540;
+      const parts = timeStr.split(':');
+      return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+    }
+
+    // Raggruppa gli eventi del giorno identificando sovrapposizioni orarie.
+    // Se 2 eventi si sovrappongono nell'orario, vengono accoppiati in un gruppo da 2 per essere affiancati
+    // orizzontalmente dividendo la colonna. Gli eventi senza sovrapposizione restano singoli a larghezza intera.
+    groupDayEvents(events) {
+      if (!events || events.length === 0) return [];
+
+      const sorted = [...events].sort((a, b) => {
+        const tA = this.timeToMinutes(a.time);
+        const tB = this.timeToMinutes(b.time);
+        if (tA !== tB) return tA - tB;
+        const durA = parseFloat(a.duration) || 1;
+        const durB = parseFloat(b.duration) || 1;
+        return durB - durA;
+      });
+
+      const clusters = [];
+      let currentCluster = [];
+      let currentMaxEnd = -1;
+
+      for (const ev of sorted) {
+        const start = this.timeToMinutes(ev.time);
+        const dur = parseFloat(ev.duration) || 1;
+        const end = start + Math.round(dur * 60);
+
+        if (currentCluster.length === 0) {
+          currentCluster.push(ev);
+          currentMaxEnd = end;
+        } else {
+          // Sovrapposizione se l'inizio dell'evento è precedente al termine massimo del cluster
+          if (start < currentMaxEnd && currentCluster.length < 2) {
+            currentCluster.push(ev);
+            currentMaxEnd = Math.max(currentMaxEnd, end);
+          } else {
+            clusters.push(currentCluster);
+            currentCluster = [ev];
+            currentMaxEnd = end;
+          }
+        }
+      }
+      if (currentCluster.length > 0) {
+        clusters.push(currentCluster);
+      }
+
+      return clusters;
+    }
+
+    // Genera l'HTML degli eventi del giorno: 2 colonne orizzontali affiancate se sovrapposti, 1 per riga se singoli
+    renderDayEventsHtml(events, dayTag = '') {
+      if (!events || events.length === 0) return '';
+      const clusters = this.groupDayEvents(events);
+      let html = '';
+
+      clusters.forEach(cluster => {
+        if (cluster.length === 1) {
+          html += this.renderWeekCardHtml(cluster[0], dayTag, false);
+        } else {
+          html += `<div class="asim-overlap-row">`;
+          cluster.forEach(ev => {
+            html += this.renderWeekCardHtml(ev, dayTag, true);
+          });
+          html += `</div>`;
+        }
+      });
+
+      return html;
+    }
+
+    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili e supporto split affiancato)
+    renderWeekCardHtml(ev, dayTag = '', isSplit = false) {
       const colors = this.getTechColor(ev.technician);
       const duration = parseFloat(ev.duration) || 1;
       const endTime = this.calculateEndTime(ev.time, duration);
-      const cardHeight = this.calculateCardHeight(duration);
+      const cardHeight = isSplit ? 'auto' : `${this.calculateCardHeight(duration)}px`;
       const durationLabel = this.formatDuration(duration);
       const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
       const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
 
       return `
-        <div class="asim-card-event ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight}px;" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
+        <div class="asim-card-event ${isSplit ? 'is-split' : ''} ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
           <div>
             <div class="asim-card-top">
               <span class="asim-card-time">${dayTag ? `<span class="asim-badge-day-tag">${dayTag}</span> ` : ''}${ev.time} - ${endTime}</span>
@@ -2524,9 +2598,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         if (dayEvents.length === 0) {
           html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
-          dayEvents.forEach(ev => {
-            html += this.renderWeekCardHtml(ev);
-          });
+          html += this.renderDayEventsHtml(dayEvents);
         }
 
         html += `
@@ -2569,9 +2641,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <button class="asim-mini-add-btn" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()}">+</button>
             </div>
           `;
-          satEvents.forEach(ev => {
-            html += this.renderWeekCardHtml(ev, 'Sab');
-          });
+          html += this.renderDayEventsHtml(satEvents, 'Sab');
         }
         if (sunEvents.length > 0) {
           html += `
@@ -2581,9 +2651,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <button class="asim-mini-add-btn" data-date="${isoSun}" title="Aggiungi intervento per Domenica ${dSun.getDate()}">+</button>
             </div>
           `;
-          sunEvents.forEach(ev => {
-            html += this.renderWeekCardHtml(ev, 'Dom');
-          });
+          html += this.renderDayEventsHtml(sunEvents, 'Dom');
         }
       }
 

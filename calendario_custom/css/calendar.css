@@ -759,6 +759,86 @@
   white-space: normal;
 }
 
+/* Riga di sovrapposizione oraria: 2 tecnici alla stessa ora affiancati orizzontalmente dividendo la colonna */
+.asim-overlap-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  width: 100%;
+  margin-bottom: 8px;
+  align-items: stretch;
+}
+
+.asim-card-event.is-split {
+  margin-bottom: 0 !important;
+  padding: 5px 6px !important;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.asim-card-event.is-split .asim-card-top {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 3px;
+}
+
+.asim-card-event.is-split .asim-card-top-badges {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.asim-card-event.is-split .asim-card-time {
+  font-size: 0.68rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.asim-card-event.is-split .asim-card-title {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+
+.asim-card-event.is-split .asim-card-tech {
+  font-size: 0.68rem;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asim-card-event.is-split .asim-card-addr {
+  font-size: 0.64rem;
+  line-height: 1.15;
+}
+
+.asim-card-event.is-split .asim-card-note {
+  font-size: 0.64rem;
+  padding: 2px 4px;
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
+.asim-card-event.is-split .asim-card-occupy-bar {
+  margin-top: 4px;
+  padding-top: 3px;
+}
+
+.asim-card-event.is-split .asim-occupy-span {
+  display: none;
+}
+
+.asim-card-event.is-split .asim-occupy-badge {
+  font-size: 0.62rem;
+  padding: 0 4px;
+}
+
 .asim-badge-day-tag {
   display: inline-block;
   background-color: #f1f5f9;
