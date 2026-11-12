@@ -144,6 +144,7 @@
       );
 
       this.apiUrl = options.apiUrl || 'api.php';
+      this.hasPhpBackend = typeof window !== 'undefined' && window.location && window.location.hostname && !window.location.hostname.includes('github.io');
       this.defaultCsvUrl = options.defaultCsvUrl || 'sample.csv';
       this.storageKey = options.storageKey || 'asim_calendar_events_v1';
       this.events = [];
@@ -1220,12 +1221,16 @@
 
           this.showToast('Client email aperto! Testo formattato copiato anche negli appunti.', 'success');
 
-          if (this.apiUrl && this.apiUrl !== '') {
+          if (this.hasPhpBackend && this.apiUrl) {
             fetch(this.apiUrl + '?action=send_email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ to: to, subject: subject, body: body, html: html })
-            }).catch(() => {});
+            }).then(res => {
+              if (!res.ok) this.hasPhpBackend = false;
+            }).catch(() => {
+              this.hasPhpBackend = false;
+            });
           }
 
           setTimeout(() => {
@@ -1399,18 +1404,24 @@
         }
       }
 
-      // 2. Prova da backend API PHP
-      try {
-        const response = await fetch(this.apiUrl + '?action=get', { cache: 'no-store' });
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.status === 'ok' && Array.isArray(data.events) && data.events.length > 0) {
-            this.setEvents(data.events);
-            this.startTursoPolling();
-            return;
+      // 2. Prova da backend API PHP (se disponibile e non su hosting statico)
+      if (this.hasPhpBackend && this.apiUrl) {
+        try {
+          const response = await fetch(this.apiUrl + '?action=get', { cache: 'no-store' });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.status === 'ok' && Array.isArray(data.events) && data.events.length > 0) {
+              this.setEvents(data.events);
+              this.startTursoPolling();
+              return;
+            }
+          } else {
+            this.hasPhpBackend = false;
           }
+        } catch (err) {
+          this.hasPhpBackend = false;
         }
-      } catch (err) {}
+      }
 
       // 3. Prova da LocalStorage
       const stored = localStorage.getItem(this.storageKey);
@@ -1472,15 +1483,19 @@
           await this.batchImportToTurso(parsedEvents);
         }
 
-        // Prova a sincronizzare su server PHP se presente
-        try {
-          const formData = new FormData();
-          formData.append('csv_file', file);
-          await fetch(this.apiUrl + '?action=upload', {
-            method: 'POST',
-            body: formData
-          });
-        } catch (err) {}
+        // Prova a sincronizzare su server PHP se presente (e non su GitHub Pages)
+        if (this.hasPhpBackend && this.apiUrl) {
+          try {
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            await fetch(this.apiUrl + '?action=upload', {
+              method: 'POST',
+              body: formData
+            });
+          } catch (err) {
+            this.hasPhpBackend = false;
+          }
+        }
 
         this.showToast(`Importati ${parsedEvents.length} interventi su Turso DB!`, 'success');
       };
@@ -1539,9 +1554,30 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           if (actionType === 'delete' && modifiedEvent) {
             await this.turso.execute('DELETE FROM appointments WHERE id = ?;', [modifiedEvent.id]);
           } else if (modifiedEvent) {
+            const accVal = this.getAccessibility(modifiedEvent);
             try {
-              const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+              const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, is_completed, accessibilita, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
               await this.turso.execute(sql, [
+                modifiedEvent.id,
+                modifiedEvent.clientName,
+                modifiedEvent.jobCode || 'Altro',
+                modifiedEvent.technician || 'Non assegnato',
+                modifiedEvent.date || '',
+                modifiedEvent.time || '',
+                modifiedEvent.duration || 1,
+                modifiedEvent.priority || 2,
+                modifiedEvent.pdr || '',
+                modifiedEvent.matricola || '',
+                modifiedEvent.indirizzo || '',
+                modifiedEvent.telefono || '',
+                modifiedEvent.note || '',
+                modifiedEvent.author || 'Operatore',
+                modifiedEvent.isCompleted ? 1 : 0,
+                accVal
+              ]);
+            } catch (errCol) {
+              const sqlLegacy = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+              await this.turso.execute(sqlLegacy, [
                 modifiedEvent.id,
                 modifiedEvent.clientName,
                 modifiedEvent.jobCode || 'Altro',
@@ -1558,28 +1594,19 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
                 modifiedEvent.author || 'Operatore',
                 modifiedEvent.isCompleted ? 1 : 0
               ]);
-            } catch (errCol) {
-              const sqlLegacy = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
-              await this.turso.execute(sqlLegacy, [
-                modifiedEvent.id,
-                modifiedEvent.clientName,
-                modifiedEvent.jobCode || 'Altro',
-                modifiedEvent.technician || 'Non assegnato',
-                modifiedEvent.date || '',
-                modifiedEvent.time || '',
-                modifiedEvent.duration || 1,
-                modifiedEvent.priority || 2,
-                modifiedEvent.pdr || '',
-                modifiedEvent.matricola || '',
-                modifiedEvent.indirizzo || '',
-                modifiedEvent.telefono || '',
-                modifiedEvent.note || '',
-                modifiedEvent.author || 'Operatore'
-              ]);
             }
           } else {
             await this.batchImportToTurso(this.events);
           }
+
+          // Aggiorna firma Turso locale per evitare che il polling auto-sovrascriva la modifica appena salvata
+          try {
+            const sigRes = await this.turso.execute('SELECT count(*) as count, max(updated_at) as last_updated FROM appointments;');
+            if (sigRes.rows && sigRes.rows[0]) {
+              this._lastTursoSignature = `${sigRes.rows[0].count}_${sigRes.rows[0].last_updated}`;
+            }
+          } catch (e) {}
+
           this.updateTursoBadge('online');
         } catch (err) {
           console.error('[Turso Save Error]', err);
@@ -1587,14 +1614,22 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         }
       }
 
-      // Se API PHP disponibile, sincronizza su server
-      try {
-        fetch(this.apiUrl + '?action=save_events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events: this.events })
-        }).catch(() => {});
-      } catch (e) {}
+      // Se API PHP disponibile (non su hosting statico come GitHub Pages)
+      if (this.hasPhpBackend && this.apiUrl) {
+        try {
+          fetch(this.apiUrl + '?action=save_events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: this.events })
+          }).then(res => {
+            if (!res.ok) this.hasPhpBackend = false;
+          }).catch(() => {
+            this.hasPhpBackend = false;
+          });
+        } catch (e) {
+          this.hasPhpBackend = false;
+        }
+      }
 
       this.updateFilters();
       this.renderView();
@@ -1605,14 +1640,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (!this.turso.isConfigured() || !events || events.length === 0) return;
       try {
         const statements = events.map(ev => ({
-          sql: `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`,
+          sql: `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, is_completed, accessibilita, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`,
           args: [
             ev.id,
             ev.clientName,
             ev.jobCode || 'Altro',
             ev.technician || 'Non assegnato',
-            ev.date,
-            ev.time,
+            ev.date || '',
+            ev.time || '',
             ev.duration || 1,
             ev.priority || 2,
             ev.pdr || '',
@@ -1620,7 +1655,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             ev.indirizzo || '',
             ev.telefono || '',
             ev.note || '',
-            ev.author || 'Operatore'
+            ev.author || 'Operatore',
+            ev.isCompleted ? 1 : 0,
+            this.getAccessibility(ev)
           ]
         }));
         await this.turso.executeBatch(statements);
@@ -1740,9 +1777,15 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       this.updateFilters();
       this.renderView();
 
-      try {
-        fetch(this.apiUrl + '?action=clear', { method: 'POST' }).catch(() => {});
-      } catch (e) {}
+      if (this.hasPhpBackend && this.apiUrl) {
+        try {
+          fetch(this.apiUrl + '?action=clear', { method: 'POST' }).catch(() => {
+            this.hasPhpBackend = false;
+          });
+        } catch (e) {
+          this.hasPhpBackend = false;
+        }
+      }
       this.showToast('Calendario svuotato sia in locale che su Turso DB.', 'info');
     }
 
