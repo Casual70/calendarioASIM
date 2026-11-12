@@ -167,14 +167,30 @@
       await this.loadInitialData();
     }
 
-    // Assicura l'esistenza della colonna duration su Turso DB
+    // Assicura l'esistenza delle colonne duration e is_completed su Turso DB
     async ensureTursoSchema() {
       if (!this.turso.isConfigured()) return;
       try {
         await this.turso.execute('ALTER TABLE appointments ADD COLUMN duration REAL DEFAULT 1;');
-      } catch (e) {
-        // Ignora se la colonna esiste già
-      }
+      } catch (e) {}
+      try {
+        await this.turso.execute('ALTER TABLE appointments ADD COLUMN is_completed INTEGER DEFAULT 0;');
+      } catch (e) {}
+    }
+
+    // Calcola la chiave della settimana (es. week_2026-11-16) per le attività senza giorno prefissato
+    getWeekKey(date) {
+      const cur = new Date(date || this.selectedDate);
+      let dayOfWeek = cur.getDay() - 1;
+      if (dayOfWeek === -1) dayOfWeek = 6;
+      const startOfWeek = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - dayOfWeek);
+      return 'week_' + this.formatISODate(startOfWeek);
+    }
+
+    // Determina se un elemento è un'attività della settimana (senza giorno prefissato)
+    isWeekTask(ev) {
+      if (!ev || !ev.date) return false;
+      return typeof ev.date === 'string' && (ev.date.startsWith('week_') || ev.date === 'unscheduled');
     }
 
     // Calcola l'orario di fine a partire da start ("HH:MM") e durata in ore (es. 1, 1.5, 2)
@@ -433,6 +449,38 @@
           <!-- Area Calendario / Viste -->
           <div class="asim-cal-body" id="asim-cal-body">
             <!-- Render dinamico vista -->
+          </div>
+
+          <!-- Sezione Attività della Settimana (Senza giorno prefissato) -->
+          <div class="asim-week-tasks-section" id="asim-week-tasks-section">
+            <div class="asim-week-tasks-header">
+              <div class="asim-week-tasks-title-group">
+                <div class="asim-week-tasks-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4"></path>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="asim-week-tasks-title">Attività della Settimana (Senza giorno prefissato)</h3>
+                  <span class="asim-week-tasks-subtitle" id="asim-week-tasks-subtitle">Attività e interventi da svolgere durante la settimana corrente</span>
+                </div>
+                <span class="asim-week-tasks-badge" id="asim-week-tasks-count">0 attività</span>
+              </div>
+
+              <div class="asim-week-tasks-quickadd">
+                <input type="text" id="asim-quick-task-title" class="asim-quick-task-input" placeholder="+ Nuova attività da fare in settimana (premi Invio per salvare)...">
+                <select id="asim-quick-task-tech" class="asim-quick-task-select">
+                  <option value="">Tecnico non assegnato</option>
+                </select>
+                <button type="button" id="asim-quick-task-btn" class="asim-btn asim-btn-primary asim-btn-sm">+ Aggiungi</button>
+              </div>
+            </div>
+
+            <!-- Area Dropzone e Lista Attività -->
+            <div class="asim-week-tasks-body" id="asim-week-tasks-body" data-week-zone="true">
+              <!-- Render dinamico -->
+            </div>
           </div>
 
           <!-- Dropzone Overlay (visibile durante drag and drop) -->
@@ -1126,6 +1174,87 @@
           }
         });
       });
+
+      // Gestione Quick-Add Attività Settimanale (senza giorno prefissato)
+      const quickInput = root.querySelector('#asim-quick-task-title');
+      const quickTech = root.querySelector('#asim-quick-task-tech');
+      const quickBtn = root.querySelector('#asim-quick-task-btn');
+
+      const handleAddWeekTask = () => {
+        const title = quickInput ? quickInput.value.trim() : '';
+        if (!title) {
+          this.showToast('Inserisci un titolo o descrizione per l\'attività', 'error');
+          return;
+        }
+
+        const weekKey = this.getWeekKey(this.selectedDate);
+        const tech = quickTech ? quickTech.value.trim() : '';
+
+        const newEv = {
+          id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          clientName: title,
+          date: weekKey,
+          time: '',
+          duration: 1,
+          technician: tech || 'Non assegnato',
+          jobCode: 'Altro',
+          indirizzo: '',
+          telefono: '',
+          priority: 2,
+          pdr: '',
+          matricola: '',
+          note: '',
+          author: 'Operatore',
+          isCompleted: false,
+          rawDate: ''
+        };
+
+        this.events.push(newEv);
+        this.saveEventsPermanently(newEv, 'upsert');
+        if (quickInput) quickInput.value = '';
+        this.renderView();
+        this.showToast(`Attività "${title}" aggiunta alla settimana!`, 'success');
+      };
+
+      if (quickBtn) {
+        quickBtn.addEventListener('click', handleAddWeekTask);
+      }
+      if (quickInput) {
+        quickInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddWeekTask();
+          }
+        });
+      }
+
+      // Drop zone per togliere la data e spostare un intervento tra le attività settimanali
+      const weekTasksBody = root.querySelector('#asim-week-tasks-body');
+      if (weekTasksBody) {
+        weekTasksBody.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          weekTasksBody.classList.add('drag-over');
+        });
+        weekTasksBody.addEventListener('dragleave', (e) => {
+          if (!weekTasksBody.contains(e.relatedTarget)) {
+            weekTasksBody.classList.remove('drag-over');
+          }
+        });
+        weekTasksBody.addEventListener('drop', (e) => {
+          e.preventDefault();
+          weekTasksBody.classList.remove('drag-over');
+          const eventId = e.dataTransfer.getData('text/plain');
+          const ev = this.events.find(x => x.id === eventId);
+          if (ev) {
+            const weekKey = this.getWeekKey(this.selectedDate);
+            ev.date = weekKey;
+            ev.time = '';
+            this.saveEventsPermanently(ev, 'upsert');
+            this.renderView();
+            this.showToast(`Intervento "${ev.clientName}" spostato tra le attività da fare in settimana!`, 'success');
+          }
+        });
+      }
     }
 
     // Carica dati iniziali da Turso DB (o fallback locale)
@@ -1291,23 +1420,44 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           if (actionType === 'delete' && modifiedEvent) {
             await this.turso.execute('DELETE FROM appointments WHERE id = ?;', [modifiedEvent.id]);
           } else if (modifiedEvent) {
-            const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
-            await this.turso.execute(sql, [
-              modifiedEvent.id,
-              modifiedEvent.clientName,
-              modifiedEvent.jobCode || 'Altro',
-              modifiedEvent.technician || 'Non assegnato',
-              modifiedEvent.date,
-              modifiedEvent.time,
-              modifiedEvent.duration || 1,
-              modifiedEvent.priority || 2,
-              modifiedEvent.pdr || '',
-              modifiedEvent.matricola || '',
-              modifiedEvent.indirizzo || '',
-              modifiedEvent.telefono || '',
-              modifiedEvent.note || '',
-              modifiedEvent.author || 'Operatore'
-            ]);
+            try {
+              const sql = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+              await this.turso.execute(sql, [
+                modifiedEvent.id,
+                modifiedEvent.clientName,
+                modifiedEvent.jobCode || 'Altro',
+                modifiedEvent.technician || 'Non assegnato',
+                modifiedEvent.date || '',
+                modifiedEvent.time || '',
+                modifiedEvent.duration || 1,
+                modifiedEvent.priority || 2,
+                modifiedEvent.pdr || '',
+                modifiedEvent.matricola || '',
+                modifiedEvent.indirizzo || '',
+                modifiedEvent.telefono || '',
+                modifiedEvent.note || '',
+                modifiedEvent.author || 'Operatore',
+                modifiedEvent.isCompleted ? 1 : 0
+              ]);
+            } catch (errCol) {
+              const sqlLegacy = `INSERT OR REPLACE INTO appointments (id, client_name, job_code, technician, date, time, duration, priority, pdr, matricola, indirizzo, telefono, note, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`;
+              await this.turso.execute(sqlLegacy, [
+                modifiedEvent.id,
+                modifiedEvent.clientName,
+                modifiedEvent.jobCode || 'Altro',
+                modifiedEvent.technician || 'Non assegnato',
+                modifiedEvent.date || '',
+                modifiedEvent.time || '',
+                modifiedEvent.duration || 1,
+                modifiedEvent.priority || 2,
+                modifiedEvent.pdr || '',
+                modifiedEvent.matricola || '',
+                modifiedEvent.indirizzo || '',
+                modifiedEvent.telefono || '',
+                modifiedEvent.note || '',
+                modifiedEvent.author || 'Operatore'
+              ]);
+            }
           } else {
             await this.batchImportToTurso(this.events);
           }
@@ -1390,6 +1540,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           indirizzo: r.indirizzo || '',
           telefono: r.telefono || '',
           note: r.note || '',
+          isCompleted: Boolean(r.is_completed && r.is_completed != 0),
           updatedAt: r.updated_at
         };
       });
@@ -1904,7 +2055,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const counter = this.container.querySelector('#asim-counter-badge');
       const label = this.container.querySelector('#asim-nav-label');
 
-      counter.textContent = `${filtered.length} intervent${filtered.length === 1 ? 'o' : 'i'}`;
+      const scheduled = filtered.filter(ev => !this.isWeekTask(ev));
+      counter.textContent = `${scheduled.length} intervent${scheduled.length === 1 ? 'o' : 'i'}`;
 
       if (this.currentView === 'month') {
         this.renderMonthView(body, label, filtered);
@@ -1915,6 +2067,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       } else if (this.currentView === 'list') {
         this.renderListView(body, label, filtered);
       }
+
+      // Renderizza sempre sotto il calendario le attività da fare durante la settimana
+      this.renderWeekTasks();
 
       // Aggiorna intestazione per la stampa
       const printTitle = this.container.querySelector('#asim-print-view-title');
@@ -2540,6 +2695,157 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
+    // Renderizza la sezione delle attività da fare durante la settimana (senza giorno prefissato)
+    renderWeekTasks() {
+      const root = this.container;
+      const section = root.querySelector('#asim-week-tasks-section');
+      const bodyEl = root.querySelector('#asim-week-tasks-body');
+      const countEl = root.querySelector('#asim-week-tasks-count');
+      const subtitleEl = root.querySelector('#asim-week-tasks-subtitle');
+      const techSelect = root.querySelector('#asim-quick-task-tech');
+      if (!section || !bodyEl) return;
+
+      const weekKey = this.getWeekKey(this.selectedDate);
+      const cur = new Date(this.selectedDate);
+      let dayOfWeek = cur.getDay() - 1;
+      if (dayOfWeek === -1) dayOfWeek = 6;
+      const startOfWeek = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() - dayOfWeek);
+      const endOfWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 6);
+      const weekLabel = `${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()}`;
+
+      if (subtitleEl) {
+        subtitleEl.textContent = `Attività da svolgere durante la settimana ${weekLabel}`;
+      }
+
+      // Popola select dei tecnici per il quick add se necessario
+      if (techSelect) {
+        const curVal = techSelect.value;
+        let optHtml = '<option value="">Tecnico non assegnato</option>';
+        Array.from(this.technicians).forEach(tech => {
+          if (tech && tech !== 'Non assegnato') {
+            optHtml += `<option value="${this.escapeHtml(tech)}">@${this.escapeHtml(tech)}</option>`;
+          }
+        });
+        techSelect.innerHTML = optHtml;
+        if (curVal) techSelect.value = curVal;
+      }
+
+      // Filtra le attività settimanali senza giorno prefissato
+      let weekTasks = this.events.filter(ev => {
+        return ev.date === weekKey || !ev.date || ev.date === 'unscheduled';
+      });
+
+      // Applica filtro tecnico se attivo
+      if (this.activeTechnician && this.activeTechnician !== 'all') {
+        weekTasks = weekTasks.filter(ev => (ev.technician || '').toLowerCase() === this.activeTechnician.toLowerCase());
+      }
+
+      // Applica filtro codice se attivo
+      if (this.activeJobCode && this.activeJobCode !== 'all') {
+        weekTasks = weekTasks.filter(ev => (ev.jobCode || '').toLowerCase() === this.activeJobCode.toLowerCase());
+      }
+
+      // Applica ricerca se attiva
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        weekTasks = weekTasks.filter(ev => {
+          return (ev.clientName || '').toLowerCase().includes(q) ||
+                 (ev.note || '').toLowerCase().includes(q) ||
+                 (ev.indirizzo || '').toLowerCase().includes(q) ||
+                 (ev.jobCode || '').toLowerCase().includes(q) ||
+                 (ev.technician || '').toLowerCase().includes(q);
+        });
+      }
+
+      if (countEl) {
+        const completedCount = weekTasks.filter(t => t.isCompleted).length;
+        countEl.textContent = `${weekTasks.length} attività${completedCount > 0 ? ' (' + completedCount + ' completate)' : ''}`;
+      }
+
+      if (weekTasks.length === 0) {
+        bodyEl.innerHTML = `
+          <div class="asim-tasks-empty">
+            <span>Nessuna attività inserita per la settimana ${weekLabel}. Scrivi un'attività nel campo sopra oppure trascina qui un intervento dal calendario per togliergli la data prefissata.</span>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      weekTasks.forEach(ev => {
+        const colors = this.getTechColor(ev.technician);
+        const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
+
+        html += `
+          <div class="asim-task-item ${ev.isCompleted ? 'is-completed' : ''}" draggable="true" data-id="${ev.id}" title="Trascina su un giorno della settimana per pianificarlo!">
+            <input type="checkbox" class="asim-task-checkbox" ${ev.isCompleted ? 'checked' : ''} data-id="${ev.id}" title="Segna come completata">
+            <div class="asim-task-content">
+              <div class="asim-task-title">${this.escapeHtml(ev.clientName)}</div>
+              <div class="asim-task-meta">
+                ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : ''}
+                ${ev.jobCode && ev.jobCode !== 'Altro' ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
+                ${ev.indirizzo ? `<span class="asim-task-addr" title="${this.escapeHtml(ev.indirizzo)}">📍 ${this.escapeHtml(ev.indirizzo)}</span>` : ''}
+                ${cleanNote ? `<span class="asim-task-note" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</span>` : ''}
+              </div>
+            </div>
+            <div class="asim-task-actions">
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-outline asim-task-schedule-btn" data-id="${ev.id}" title="Pianifica in un giorno specifico">📅 Pianifica</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-task-edit-btn" data-id="${ev.id}" title="Modifica dettagli">✏️</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-btn-danger asim-task-delete-btn" data-id="${ev.id}" title="Elimina attività">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+
+      bodyEl.innerHTML = html;
+
+      // Click e drag sulle attività settimanali
+      bodyEl.querySelectorAll('.asim-task-item').forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData('text/plain', card.dataset.id);
+          card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragend', () => {
+          card.classList.remove('is-dragging');
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-checkbox').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+          const ev = this.events.find(x => x.id === chk.dataset.id);
+          if (ev) {
+            ev.isCompleted = chk.checked;
+            this.saveEventsPermanently(ev, 'upsert');
+            this.renderWeekTasks();
+          }
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-schedule-btn, .asim-task-edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev) {
+            this.openEditMode(ev);
+          }
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev && confirm(`Eliminare l'attività "${ev.clientName}"?`)) {
+            this.events = this.events.filter(x => x.id !== ev.id);
+            this.saveEventsPermanently(ev, 'delete');
+            this.renderView();
+            this.showToast('Attività eliminata.', 'info');
+          }
+        });
+      });
+    }
+
     // Apre la modale di dettaglio intervento
     // Apre la modale in modalità CREAZIONE nuovo intervento
     openCreateMode(defaultDate = null) {
@@ -2723,7 +3029,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (saveBtn) saveBtn.innerHTML = '💾 Salva Modifiche';
 
       root.querySelector('#edit-client').value = ev.clientName || '';
-      root.querySelector('#edit-date').value = ev.date || '';
+      root.querySelector('#edit-date').value = (ev.date && !ev.date.startsWith('week_') && ev.date.includes('-')) ? ev.date : '';
       root.querySelector('#edit-time').value = ev.time || '09:00';
       root.querySelector('#edit-duration').value = String(ev.duration || 1);
       root.querySelector('#edit-tech').value = ev.technician || '';
@@ -2903,6 +3209,43 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             `;
           });
         });
+      }
+
+      // Attività della settimana (senza giorno prefissato) se presenti
+      const weekKey = this.getWeekKey(this.selectedDate);
+      const weekTasks = this.events.filter(ev => (ev.date === weekKey || !ev.date || ev.date === 'unscheduled') && !ev.isCompleted);
+      if (weekTasks.length > 0) {
+        bodyText += `Attività della settimana (senza giorno prefissato):\n`;
+        bodyText += `-----------------------------------------------------\n\n`;
+        let weekTaskCardsHtml = '';
+        weekTasks.forEach(ev => {
+          const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').replace(/[\r\n]+/g, ' ').trim() : '';
+          bodyText += `Attività: ${ev.clientName}\n`;
+          if (ev.technician && ev.technician !== 'Non assegnato') bodyText += `Tecnico: @${ev.technician}\n`;
+          if (ev.indirizzo) bodyText += `Indirizzo: ${ev.indirizzo}\n`;
+          if (cleanNote) bodyText += `Note: ${cleanNote}\n`;
+          bodyText += `\n`;
+
+          weekTaskCardsHtml += `
+            <div style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px;">
+              <div style="font-size: 13px; color: #0f172a; line-height: 1.5;">
+                <strong>${this.escapeHtml(ev.clientName)}</strong>
+                ${ev.technician && ev.technician !== 'Non assegnato' ? ` <span style="background-color: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 999px; font-size: 11px;">@${this.escapeHtml(ev.technician)}</span>` : ''}
+                ${ev.indirizzo ? `<div style="font-size: 12px; color: #64748b;">Indirizzo: ${this.escapeHtml(ev.indirizzo)}</div>` : ''}
+                ${cleanNote ? `<div style="font-size: 12px; color: #475569;">Note: <em>${this.escapeHtml(cleanNote)}</em></div>` : ''}
+              </div>
+            </div>
+          `;
+        });
+
+        htmlCards += `
+          <div style="margin-top: 20px; margin-bottom: 10px;">
+            <div style="background-color: #f8fafc; padding: 8px 12px; font-weight: 700; font-size: 13px; border-left: 4px solid #64748b; color: #334155; border-radius: 4px;">
+              Attività da svolgere durante la settimana (${weekTasks.length})
+            </div>
+          </div>
+          ${weekTaskCardsHtml}
+        `;
       }
 
       bodyText += `-----------------------------------------------------\n`;

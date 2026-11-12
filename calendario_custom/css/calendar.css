@@ -823,6 +823,238 @@
   transform: scale(1.15);
 }
 
+/* ----------------------------------------------------
+   SEZIONE ATTIVITÀ DELLA SETTIMANA (SENZA GIORNO DEFINITO)
+   ---------------------------------------------------- */
+.asim-week-tasks-section {
+  background-color: #ffffff;
+  border-top: 2px solid var(--asim-gray-200);
+  border-bottom: 1px solid var(--asim-gray-200);
+  padding: 16px 20px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02);
+  margin-top: 4px;
+}
+
+.asim-week-tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.asim-week-tasks-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.asim-week-tasks-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: #eff6ff;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asim-week-tasks-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--asim-gray-900);
+}
+
+.asim-week-tasks-subtitle {
+  font-size: 0.75rem;
+  color: var(--asim-gray-500);
+  display: block;
+}
+
+.asim-week-tasks-badge {
+  background-color: #f1f5f9;
+  color: #0284c7;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+}
+
+.asim-week-tasks-quickadd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-grow: 1;
+  max-width: 620px;
+}
+
+.asim-quick-task-input {
+  flex-grow: 1;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  border: 1px solid var(--asim-gray-300);
+  border-radius: var(--asim-radius-sm);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.asim-quick-task-input:focus {
+  border-color: var(--asim-primary);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.asim-quick-task-select {
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  border: 1px solid var(--asim-gray-300);
+  border-radius: var(--asim-radius-sm);
+  background-color: #ffffff;
+  color: var(--asim-gray-700);
+  outline: none;
+  cursor: pointer;
+}
+
+.asim-week-tasks-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px;
+  background-color: #f8fafc;
+  border: 1px dashed var(--asim-gray-300);
+  border-radius: var(--asim-radius-md);
+  transition: all 0.2s ease;
+}
+
+.asim-week-tasks-body.drag-over {
+  background-color: #e0f2fe;
+  border-color: var(--asim-primary);
+  border-style: solid;
+}
+
+.asim-task-item {
+  background-color: #ffffff;
+  border: 1px solid var(--asim-gray-200);
+  border-radius: var(--asim-radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  cursor: grab;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.asim-task-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  border-color: #cbd5e1;
+}
+
+.asim-task-item.is-completed {
+  opacity: 0.6;
+  background-color: #f8fafc;
+}
+
+.asim-task-item.is-completed .asim-task-title {
+  text-decoration: line-through;
+  color: var(--asim-gray-400);
+}
+
+.asim-task-checkbox {
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: var(--asim-primary);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.asim-task-content {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.asim-task-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--asim-gray-900);
+  line-height: 1.3;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.asim-task-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.asim-task-tech {
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+}
+
+.asim-task-code {
+  background-color: var(--asim-gray-100);
+  color: var(--asim-gray-700);
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.asim-task-addr {
+  color: var(--asim-gray-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.asim-task-note {
+  color: #334155;
+  background-color: #f1f5f9;
+  border-left: 2px solid #0284c7;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 0.68rem;
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  word-break: break-word;
+}
+
+.asim-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.asim-task-item:hover .asim-task-actions {
+  opacity: 1;
+}
+
+.asim-tasks-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--asim-gray-400);
+  font-size: 0.8rem;
+  padding: 16px 8px;
+}
+
 .asim-empty-day {
   font-size: 0.75rem;
   color: var(--asim-gray-400);
