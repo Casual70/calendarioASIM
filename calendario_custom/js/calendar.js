@@ -283,7 +283,18 @@
 
       if (!timeInput || !durInput || !startEl || !endEl || !badgeEl) return;
 
-      const time = timeInput.value || '09:00';
+      const dateVal = dateInput ? dateInput.value.trim() : '';
+      const timeVal = timeInput ? timeInput.value.trim() : '';
+
+      if (!dateVal && !timeVal) {
+        startEl.textContent = 'Non impostato';
+        endEl.textContent = '-';
+        badgeEl.textContent = '📅 Attività settimanale';
+        if (conflictAlert) conflictAlert.style.display = 'none';
+        return;
+      }
+
+      const time = timeVal || '09:00';
       const dur = parseFloat(durInput.value) || 1;
       const endTime = this.calculateEndTime(time, dur);
       const durLabel = this.formatDuration(dur);
@@ -648,13 +659,14 @@
                   </div>
 
                   <div class="asim-form-group">
-                    <label>Data Intervento *</label>
-                    <input type="date" id="edit-date" class="asim-form-input" required>
+                    <label>Data Intervento <small style="color:var(--asim-gray-500); font-weight:normal;">(vuoto = attività settimanale)</small></label>
+                    <input type="date" id="edit-date" class="asim-form-input">
+                    <button type="button" id="edit-clear-date-btn" class="asim-btn asim-btn-xs asim-btn-outline" style="margin-top: 4px;" title="Rimuovi data prefissata per renderla un'attività settimanale">Rimuovi data</button>
                   </div>
 
                   <div class="asim-form-group">
-                    <label>Orario Inizio *</label>
-                    <input type="time" id="edit-time" class="asim-form-input" required>
+                    <label>Orario Inizio <small style="color:var(--asim-gray-500); font-weight:normal;">(opzionale)</small></label>
+                    <input type="time" id="edit-time" class="asim-form-input">
                   </div>
 
                   <div class="asim-form-group">
@@ -1007,17 +1019,31 @@
         });
       });
 
+      // Tasto Rimuovi Data nella modale
+      const clearDateBtn = root.querySelector('#edit-clear-date-btn');
+      if (clearDateBtn) {
+        clearDateBtn.addEventListener('click', () => {
+          const dateInput = root.querySelector('#edit-date');
+          const timeInput = root.querySelector('#edit-time');
+          if (dateInput) dateInput.value = '';
+          if (timeInput) timeInput.value = '';
+          this.updateOccupyPreview();
+        });
+      }
+
       // Salva Modifiche Form (Salvataggio Permanente nel Cloud Turso)
       root.querySelector('#asim-edit-form').addEventListener('submit', (e) => {
         e.preventDefault();
 
         if (!this.currentModalEvent) {
           // Creazione Nuovo Intervento
+          const inputDate = root.querySelector('#edit-date').value.trim();
+          const targetDate = inputDate || this.getWeekKey(this.selectedDate);
           const newEv = {
             id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             clientName: root.querySelector('#edit-client').value.trim(),
-            date: root.querySelector('#edit-date').value,
-            time: root.querySelector('#edit-time').value,
+            date: targetDate,
+            time: root.querySelector('#edit-time').value.trim() || '',
             duration: parseFloat(root.querySelector('#edit-duration').value) || 1,
             technician: root.querySelector('#edit-tech').value.trim() || 'Non assegnato',
             jobCode: root.querySelector('#edit-code').value.trim() || 'Altro',
@@ -1031,9 +1057,13 @@
             author: 'Operatore CRM',
             rawDate: ''
           };
-          const dateParts = newEv.date.split('-');
-          const timeParts = newEv.time.split(':');
-          newEv.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+          if (inputDate && inputDate.includes('-')) {
+            const dateParts = inputDate.split('-');
+            const timeParts = (newEv.time || '09:00').split(':');
+            newEv.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+          } else {
+            newEv.dateTime = null;
+          }
 
           this.events.push(newEv);
           this.saveEventsPermanently(newEv, 'upsert');
@@ -1047,18 +1077,19 @@
         const ev = this.currentModalEvent;
         ev.clientName = root.querySelector('#edit-client').value.trim();
         const inputDate = root.querySelector('#edit-date').value.trim();
-        if (inputDate) {
+        if (inputDate && inputDate.includes('-')) {
           ev.date = inputDate;
           const dateParts = ev.date.split('-');
           const timeParts = (root.querySelector('#edit-time').value || '09:00').split(':');
           ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
         } else {
+          // Se la data rimane vuota, mantieni o sposta tra le attività della settimana corrente
           if (!ev.date || !ev.date.startsWith('week_')) {
             ev.date = this.getWeekKey(this.selectedDate);
           }
           ev.dateTime = null;
         }
-        ev.time = root.querySelector('#edit-time').value;
+        ev.time = root.querySelector('#edit-time').value.trim() || '';
         ev.duration = parseFloat(root.querySelector('#edit-duration').value) || 1;
         ev.technician = root.querySelector('#edit-tech').value.trim() || 'Non assegnato';
         ev.jobCode = root.querySelector('#edit-code').value.trim() || 'Altro';
@@ -3164,7 +3195,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       root.querySelector('#edit-client').value = ev.clientName || '';
       root.querySelector('#edit-date').value = (ev.date && !ev.date.startsWith('week_') && ev.date.includes('-')) ? ev.date : '';
-      root.querySelector('#edit-time').value = ev.time || '09:00';
+      root.querySelector('#edit-time').value = ev.time || '';
       root.querySelector('#edit-duration').value = String(ev.duration || 1);
       root.querySelector('#edit-tech').value = (ev.technician && ev.technician !== 'Non assegnato') ? ev.technician : '';
       root.querySelector('#edit-code').value = ev.jobCode || '';
