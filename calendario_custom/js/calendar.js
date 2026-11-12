@@ -2221,12 +2221,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       html += `
         <div class="asim-week-col asim-week-col-weekend ${isTodaySat || isTodaySun ? 'is-today' : ''}" data-date="${isoSat}">
           <div class="asim-week-col-header">
-            <span class="asim-week-day-name">Sabato / Domenica</span>
+            <span class="asim-week-day-name">Sab / Dom</span>
             <span class="asim-week-day-num">${dSat.getDate()} - ${dSun.getDate()}</span>
-            <div class="asim-weekend-header-actions">
-              <button class="asim-col-add-btn asim-col-add-weekend" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()}">+Sab</button>
-              <button class="asim-col-add-btn asim-col-add-weekend" data-date="${isoSun}" title="Aggiungi intervento per Domenica ${dSun.getDate()}">+Dom</button>
-            </div>
+            <button class="asim-col-add-btn" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()} o Domenica ${dSun.getDate()}">+</button>
           </div>
           <div class="asim-week-col-body">
       `;
@@ -2239,6 +2236,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div class="asim-weekend-subhead" data-date="${isoSat}">
               <span>Sabato ${dSat.getDate()}</span>
               <span class="asim-weekend-count">${satEvents.length}</span>
+              <button class="asim-mini-add-btn" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()}">+</button>
             </div>
           `;
           satEvents.forEach(ev => {
@@ -2250,6 +2248,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div class="asim-weekend-subhead" data-date="${isoSun}">
               <span>Domenica ${dSun.getDate()}</span>
               <span class="asim-weekend-count">${sunEvents.length}</span>
+              <button class="asim-mini-add-btn" data-date="${isoSun}" title="Aggiungi intervento per Domenica ${dSun.getDate()}">+</button>
             </div>
           `;
           sunEvents.forEach(ev => {
@@ -2319,7 +2318,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
 
       // Aggiungi intervento da colonna settimana (+), da weekend o da cella vuota
-      container.querySelectorAll('.asim-col-add-btn, .asim-empty-day').forEach(btn => {
+      container.querySelectorAll('.asim-col-add-btn, .asim-empty-day, .asim-mini-add-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           this.openCreateMode(btn.dataset.date);
