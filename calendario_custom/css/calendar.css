@@ -926,11 +926,11 @@
 }
 
 .asim-week-tasks-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
-  min-height: 52px;
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px 8px;
   background-color: #f8fafc;
   border: 1px dashed var(--asim-gray-300);
   border-radius: var(--asim-radius-md);
@@ -947,19 +947,21 @@
   background-color: #ffffff;
   border: 1px solid var(--asim-gray-200);
   border-radius: var(--asim-radius-sm);
-  padding: 10px 12px;
+  padding: 4px 10px;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
   cursor: grab;
   transition: all 0.15s ease;
   box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
 }
 
 .asim-task-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.06);
   border-color: #cbd5e1;
 }
 
@@ -974,41 +976,54 @@
 }
 
 .asim-task-checkbox {
-  margin-top: 3px;
+  margin: 0;
   cursor: pointer;
   accent-color: var(--asim-primary);
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
-}
-
-.asim-task-content {
-  flex-grow: 1;
-  min-width: 0;
 }
 
 .asim-task-title {
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--asim-gray-900);
-  line-height: 1.3;
-  margin-bottom: 4px;
-  word-break: break-word;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 140px;
+  max-width: 250px;
+  flex-shrink: 0;
 }
 
-.asim-task-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 0.72rem;
+.asim-task-code {
+  background-color: var(--asim-gray-100);
+  color: var(--asim-gray-700);
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  border: 1px solid var(--asim-gray-200);
+}
+
+.asim-task-addr {
+  color: var(--asim-gray-600);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  flex-shrink: 1;
 }
 
 .asim-task-tech {
   font-weight: 700;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 999px;
   font-size: 0.68rem;
+  flex-shrink: 0;
 }
 
 .asim-task-unassigned {
@@ -1019,48 +1034,116 @@
   font-size: 0.68rem;
   font-weight: 500;
   border: 1px dashed var(--asim-gray-300);
+  flex-shrink: 0;
 }
 
-.asim-task-code {
-  background-color: var(--asim-gray-100);
-  color: var(--asim-gray-700);
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-}
-
-.asim-task-addr {
-  color: var(--asim-gray-500);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-}
-
-.asim-task-note {
+.asim-task-note-pill {
   color: #334155;
   background-color: #f1f5f9;
   border-left: 2px solid #0284c7;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 2px;
-  font-size: 0.68rem;
-  display: block;
-  width: 100%;
-  margin-top: 3px;
-  word-break: break-word;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  flex-shrink: 1;
 }
 
 .asim-task-actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: 0.35;
-  transition: opacity 0.15s ease;
+  margin-left: auto;
   flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
 }
 
 .asim-task-item:hover .asim-task-actions {
   opacity: 1;
+}
+
+/* Badge Accessibilità: acc (verde) e inac (arancione) */
+.asim-acc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.asim-acc-badge.is-acc {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.asim-acc-badge.is-acc:hover {
+  background-color: #bbf7d0;
+  border-color: #4ade80;
+}
+
+.asim-acc-badge.is-inac {
+  background-color: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fdba74;
+}
+
+.asim-acc-badge.is-inac:hover {
+  background-color: #fed7aa;
+  border-color: #fb923c;
+}
+
+.asim-card-top-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.asim-acc-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--asim-radius-sm);
+  padding: 2px;
+  background-color: #f1f5f9;
+  border: 1px solid var(--asim-gray-300);
+  flex-shrink: 0;
+}
+
+.asim-acc-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--asim-gray-400);
+  line-height: 1;
+}
+
+.asim-acc-toggle-btn.is-acc.is-active {
+  background-color: #dcfce7;
+  color: #15803d;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.asim-acc-toggle-btn.is-inac.is-active {
+  background-color: #ffedd5;
+  color: #c2410c;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .asim-tasks-empty {

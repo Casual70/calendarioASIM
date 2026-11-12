@@ -167,7 +167,7 @@
       await this.loadInitialData();
     }
 
-    // Assicura l'esistenza delle colonne duration e is_completed su Turso DB
+    // Assicura l'esistenza delle colonne duration, is_completed e accessibilita su Turso DB
     async ensureTursoSchema() {
       if (!this.turso.isConfigured()) return;
       try {
@@ -176,6 +176,27 @@
       try {
         await this.turso.execute('ALTER TABLE appointments ADD COLUMN is_completed INTEGER DEFAULT 0;');
       } catch (e) {}
+      try {
+        await this.turso.execute('ALTER TABLE appointments ADD COLUMN accessibilita TEXT DEFAULT "acc";');
+      } catch (e) {}
+    }
+
+    // Restituisce 'acc' (verde) o 'inac' (arancione)
+    getAccessibility(ev) {
+      if (!ev) return 'acc';
+      if (ev.accessibilita) return ev.accessibilita.toLowerCase() === 'inac' ? 'inac' : 'acc';
+      const text = `${ev.note || ''} ${ev.rawContent || ''} ${ev.clientName || ''}`.toLowerCase();
+      if (text.includes('inaccessib') || text.includes('inac')) return 'inac';
+      return 'acc';
+    }
+
+    // Renderizza il badge compatto con supporto click per commutare acc / inac
+    renderAccBadge(ev, interactive = true) {
+      const acc = this.getAccessibility(ev);
+      const isAcc = acc === 'acc';
+      const label = isAcc ? 'acc' : 'inac';
+      const title = isAcc ? 'Accessibile (clicca per impostare Inaccessibile)' : 'Inaccessibile (clicca per impostare Accessibile)';
+      return `<span class="asim-acc-badge ${isAcc ? 'is-acc' : 'is-inac'}" ${interactive ? `data-action="toggle-acc" data-id="${ev.id}"` : ''} title="${title}">${label}</span>`;
     }
 
     // Calcola la chiave della settimana (es. week_2026-11-16) per le attività senza giorno prefissato
@@ -473,6 +494,10 @@
                 <input type="text" id="asim-quick-task-type" class="asim-quick-task-input asim-quick-task-type" placeholder="Tipologia (es. C03, A01...)" list="asim-quick-task-types">
                 <datalist id="asim-quick-task-types"></datalist>
                 <input type="text" id="asim-quick-task-addr" class="asim-quick-task-input asim-quick-task-addr" placeholder="Indirizzo">
+                <div class="asim-acc-toggle-group" id="asim-quick-acc-group" title="Accessibilità: acc (verde) o inac (arancione)">
+                  <button type="button" class="asim-acc-toggle-btn is-acc is-active" data-val="acc" title="Accessibile (verde)">acc</button>
+                  <button type="button" class="asim-acc-toggle-btn is-inac" data-val="inac" title="Inaccessibile (arancione)">inac</button>
+                </div>
                 <button type="button" id="asim-quick-task-btn" class="asim-btn asim-btn-primary asim-btn-sm">+ Aggiungi Attività</button>
               </div>
             </div>
@@ -501,6 +526,7 @@
             <div class="asim-modal-card">
               <div class="asim-modal-header">
                 <div id="modal-header-badges" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                  <span class="asim-acc-badge" id="modal-acc-badge" data-action="toggle-acc" title="Clicca per commutare acc / inac">acc</span>
                   <span class="asim-badge asim-badge-code" id="modal-code">C03</span>
                   <span class="asim-badge asim-badge-tech" id="modal-tech">@Goracci</span>
                   <span class="asim-badge asim-badge-priority" id="modal-priority">Priorità 3</span>
@@ -685,6 +711,14 @@
                       <option value="2">2 - Normale</option>
                       <option value="3">3 - Media</option>
                       <option value="4">4 - Alta / Urgente</option>
+                    </select>
+                  </div>
+
+                  <div class="asim-form-group">
+                    <label>Accessibilità</label>
+                    <select id="edit-acc" class="asim-form-input">
+                      <option value="acc">acc (Accessibile - Verde)</option>
+                      <option value="inac">inac (Inaccessibile - Arancione)</option>
                     </select>
                   </div>
 
@@ -990,6 +1024,7 @@
             indirizzo: root.querySelector('#edit-address').value.trim(),
             telefono: root.querySelector('#edit-phone').value.trim(),
             priority: parseInt(root.querySelector('#edit-priority').value, 10) || 1,
+            accessibilita: root.querySelector('#edit-acc') ? root.querySelector('#edit-acc').value : 'acc',
             pdr: root.querySelector('#edit-pdr').value.trim(),
             matricola: root.querySelector('#edit-matricola').value.trim(),
             note: root.querySelector('#edit-notes').value.trim(),
@@ -1030,6 +1065,7 @@
         ev.indirizzo = root.querySelector('#edit-address').value.trim();
         ev.telefono = root.querySelector('#edit-phone').value.trim();
         ev.priority = parseInt(root.querySelector('#edit-priority').value, 10) || 1;
+        ev.accessibilita = root.querySelector('#edit-acc') ? root.querySelector('#edit-acc').value : 'acc';
         ev.pdr = root.querySelector('#edit-pdr').value.trim();
         ev.matricola = root.querySelector('#edit-matricola').value.trim();
         ev.note = root.querySelector('#edit-notes').value.trim();
@@ -1186,7 +1222,18 @@
       const quickName = root.querySelector('#asim-quick-task-name');
       const quickType = root.querySelector('#asim-quick-task-type');
       const quickAddr = root.querySelector('#asim-quick-task-addr');
+      const quickAccGroup = root.querySelector('#asim-quick-acc-group');
       const quickBtn = root.querySelector('#asim-quick-task-btn');
+
+      if (quickAccGroup) {
+        quickAccGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            quickAccGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(b => b.classList.remove('is-active'));
+            btn.classList.add('is-active');
+          });
+        });
+      }
 
       const handleAddWeekTask = () => {
         const name = quickName ? quickName.value.trim() : '';
@@ -1199,6 +1246,8 @@
         const type = quickType ? quickType.value.trim() : '';
         const addr = quickAddr ? quickAddr.value.trim() : '';
         const weekKey = this.getWeekKey(this.selectedDate);
+        const activeAccBtn = quickAccGroup ? quickAccGroup.querySelector('.asim-acc-toggle-btn.is-active') : null;
+        const accVal = activeAccBtn ? activeAccBtn.dataset.val : 'acc';
 
         const newEv = {
           id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
@@ -1211,6 +1260,7 @@
           indirizzo: addr,
           telefono: '',
           priority: 2,
+          accessibilita: accVal,
           pdr: '',
           matricola: '',
           note: '',
@@ -1226,7 +1276,7 @@
         if (quickAddr) quickAddr.value = '';
         this.updateFilters();
         this.renderView();
-        this.showToast(`Attività "${name}" aggiunta alla settimana!`, 'success');
+        this.showToast(`Attività "${name}" (${accVal.toUpperCase()}) aggiunta alla settimana!`, 'success');
       };
 
       if (quickBtn) {
@@ -1240,6 +1290,29 @@
               handleAddWeekTask();
             }
           });
+        }
+      });
+
+      // Click rapido per commutare acc / inac su qualsiasi badge del calendario o lista
+      root.addEventListener('click', (e) => {
+        const accTarget = e.target.closest('[data-action="toggle-acc"]');
+        if (accTarget) {
+          e.stopPropagation();
+          e.preventDefault();
+          const eventId = accTarget.dataset.id || (this.currentModalEvent ? this.currentModalEvent.id : null);
+          if (!eventId) return;
+          const ev = this.events.find(x => x.id === eventId);
+          if (ev) {
+            const curAcc = this.getAccessibility(ev);
+            const nextAcc = curAcc === 'acc' ? 'inac' : 'acc';
+            ev.accessibilita = nextAcc;
+            this.saveEventsPermanently(ev, 'upsert');
+            this.renderView();
+            if (this.currentModalEvent && this.currentModalEvent.id === ev.id) {
+              this.openModal(ev);
+            }
+            this.showToast(`Stato aggiornato: ${nextAcc.toUpperCase()} (${nextAcc === 'acc' ? 'Accessibile' : 'Inaccessibile'})`, 'info');
+          }
         }
       });
 
@@ -1555,6 +1628,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           indirizzo: r.indirizzo || '',
           telefono: r.telefono || '',
           note: r.note || '',
+          accessibilita: r.accessibilita || (r.note && (r.note.toLowerCase().includes('inaccessib') || r.note.toLowerCase().includes('inac')) ? 'inac' : 'acc'),
           isCompleted: Boolean(r.is_completed && r.is_completed != 0),
           updatedAt: r.updated_at
         };
@@ -1752,6 +1826,13 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const parsedDateTime = this.parseDateString(rawDate);
       const rawDuration = parseFloat(row['DURATION']) || 1;
 
+      // 6. Determina Accessibilità: acc (default) o inac (se inaccessibile)
+      let accessibilita = 'acc';
+      const fullText = `${rawContent} ${rawDesc}`.toLowerCase();
+      if (fullText.includes('inaccessib') || fullText.includes('inac')) {
+        accessibilita = 'inac';
+      }
+
       return {
         id: 'task_' + index + '_' + Math.random().toString(36).substr(2, 6),
         rawContent: rawContent,
@@ -1759,6 +1840,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         jobCode: jobCode || 'Altro',
         technician: technician || 'Non assegnato',
         priority: priority,
+        accessibilita: accessibilita,
         author: author,
         date: parsedDateTime.isoDate, // YYYY-MM-DD
         time: parsedDateTime.time,    // HH:MM
@@ -2177,6 +2259,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           html += `
             <div class="asim-event-chip" draggable="true" data-id="${ev.id}" style="background-color: ${colors.bg}; color: ${colors.text}; border-left-color: ${colors.border};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (${ev.time} - ${endTime}, durata ${this.formatDuration(duration)})">
               <span class="asim-chip-time">${timeLabel}</span>
+              ${this.renderAccBadge(ev, true)}
               <span class="asim-chip-code">${ev.jobCode}</span>
               <span class="asim-chip-name">${this.escapeHtml(ev.clientName)}</span>
             </div>
@@ -2302,7 +2385,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
           <div>
             <div class="asim-card-top">
               <span class="asim-card-time">${dayTag ? `<span class="asim-badge-day-tag">${dayTag}</span> ` : ''}${ev.time} - ${endTime}</span>
-              <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
+              <div class="asim-card-top-badges">
+                ${this.renderAccBadge(ev, true)}
+                <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
+              </div>
             </div>
             <div class="asim-card-title">${this.escapeHtml(ev.clientName)}</div>
             <div class="asim-card-tech" style="color: ${colors.text};">
@@ -2560,6 +2646,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
                 <div>
                   <div class="asim-card-header-row">
                     <div class="asim-card-title-group">
+                      ${this.renderAccBadge(ev, true)}
                       <span class="asim-badge asim-badge-code">${ev.jobCode}</span>
                       <strong class="asim-card-client">${this.escapeHtml(ev.clientName)}</strong>
                       ${hasConflict ? `<span class="asim-card-conflict-badge">⚠️ Sovrapposizione oraria</span>` : ''}
@@ -2663,6 +2750,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div class="asim-list-card" data-id="${ev.id}">
               <div class="asim-list-card-main">
                 <div class="asim-list-card-header">
+                  ${this.renderAccBadge(ev, true)}
                   <span class="asim-badge asim-badge-code">${ev.jobCode}</span>
                   <span class="asim-list-card-time">${ev.time} - ${endTime}</span>
                   <span class="asim-occupy-badge" style="font-size:0.65rem;">⏱️ ${durationLabel}</span>
@@ -2794,15 +2882,12 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         html += `
           <div class="asim-task-item ${ev.isCompleted ? 'is-completed' : ''}" draggable="true" data-id="${ev.id}" title="Trascina su un giorno della settimana per pianificarlo!">
             <input type="checkbox" class="asim-task-checkbox" ${ev.isCompleted ? 'checked' : ''} data-id="${ev.id}" title="Segna come completata">
-            <div class="asim-task-content">
-              <div class="asim-task-title">${this.escapeHtml(ev.clientName)}</div>
-              <div class="asim-task-meta">
-                ${ev.jobCode ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
-                ${ev.indirizzo ? `<span class="asim-task-addr" title="${this.escapeHtml(ev.indirizzo)}">📍 ${this.escapeHtml(ev.indirizzo)}</span>` : ''}
-                ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : '<span class="asim-task-unassigned">Non assegnato</span>'}
-                ${cleanNote ? `<span class="asim-task-note" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</span>` : ''}
-              </div>
-            </div>
+            ${this.renderAccBadge(ev, true)}
+            <div class="asim-task-title" title="${this.escapeHtml(ev.clientName)}">${this.escapeHtml(ev.clientName)}</div>
+            ${ev.jobCode ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
+            ${ev.indirizzo ? `<span class="asim-task-addr" title="${this.escapeHtml(ev.indirizzo)}">📍 ${this.escapeHtml(ev.indirizzo)}</span>` : ''}
+            ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : '<span class="asim-task-unassigned">Non assegnato</span>'}
+            ${cleanNote ? `<span class="asim-task-note-pill" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</span>` : ''}
             <div class="asim-task-actions">
               <button type="button" class="asim-btn asim-btn-xs asim-btn-outline asim-task-schedule-btn" data-id="${ev.id}" title="Pianifica in un giorno specifico">📅 Pianifica</button>
               <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-task-edit-btn" data-id="${ev.id}" title="Modifica e assegna tecnico">✏️</button>
@@ -2910,6 +2995,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-pdr').value = '';
       root.querySelector('#edit-matricola').value = '';
       root.querySelector('#edit-notes').value = '';
+      if (root.querySelector('#edit-acc')) root.querySelector('#edit-acc').value = 'acc';
 
       this.updateOccupyPreview();
 
@@ -2953,6 +3039,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       // Titolo e Badge
       this.container.querySelector('#modal-title').textContent = ev.clientName;
       this.container.querySelector('#modal-code').textContent = ev.jobCode || 'Intervento';
+
+      const acc = this.getAccessibility(ev);
+      const accBadge = this.container.querySelector('#modal-acc-badge');
+      if (accBadge) {
+        accBadge.textContent = acc;
+        accBadge.className = `asim-acc-badge ${acc === 'inac' ? 'is-inac' : 'is-acc'}`;
+        accBadge.dataset.id = ev.id;
+      }
 
       const techBadge = this.container.querySelector('#modal-tech');
       techBadge.textContent = '@' + ev.technician;
@@ -3077,6 +3171,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-address').value = ev.indirizzo || '';
       root.querySelector('#edit-phone').value = ev.telefono || '';
       root.querySelector('#edit-priority').value = String(ev.priority || 2);
+      if (root.querySelector('#edit-acc')) root.querySelector('#edit-acc').value = this.getAccessibility(ev);
       root.querySelector('#edit-pdr').value = ev.pdr || '';
       root.querySelector('#edit-matricola').value = ev.matricola || '';
       root.querySelector('#edit-notes').value = ev.note || '';
@@ -3240,9 +3335,11 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             const tipo = (ev.jobCode && ev.jobCode !== 'Altro') ? ev.jobCode : (ev.clientName || 'Intervento');
             const address = ev.indirizzo || 'Indirizzo non specificato';
             const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').replace(/[\r\n]+/g, ' ').trim() : '';
+            const acc = this.getAccessibility(ev);
+            const accBadgeHtml = `<span style="margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; ${acc === 'inac' ? 'background: #ffedd5; color: #c2410c; border: 1px solid #fdba74;' : 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;'}">${acc}</span>`;
 
             bodyText += `Ora: ${timeRange}\n`;
-            bodyText += `Tipologia: ${tipo}\n`;
+            bodyText += `Tipologia: ${tipo} [${acc}]\n`;
             bodyText += `Indirizzo: ${address}\n`;
             if (cleanNote) {
               bodyText += `Note: ${cleanNote}\n`;
@@ -3253,7 +3350,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                 <div style="font-size: 13px; color: #0f172a; line-height: 1.6;">
                   <div><strong>Ora:</strong> <span style="color: #0284c7; font-weight: 600;">${this.escapeHtml(timeRange)}</span></div>
-                  <div><strong>Tipologia:</strong> <span style="background-color: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${this.escapeHtml(tipo)}</span></div>
+                  <div><strong>Tipologia:</strong> <span style="background-color: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${this.escapeHtml(tipo)}</span> ${accBadgeHtml}</div>
                   <div><strong>Indirizzo:</strong> ${this.escapeHtml(address)}</div>
                   ${cleanNote ? `<div style="margin-top: 4px; color: #475569;"><strong>Note:</strong> <em>${this.escapeHtml(cleanNote)}</em></div>` : ''}
                 </div>
