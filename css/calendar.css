@@ -890,17 +890,19 @@
   align-items: center;
   gap: 8px;
   flex-grow: 1;
-  max-width: 620px;
+  max-width: 820px;
+  flex-wrap: wrap;
 }
 
 .asim-quick-task-input {
-  flex-grow: 1;
   padding: 7px 12px;
   font-size: 0.82rem;
   border: 1px solid var(--asim-gray-300);
   border-radius: var(--asim-radius-sm);
   outline: none;
+  background-color: #ffffff;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .asim-quick-task-input:focus {
@@ -908,15 +910,19 @@
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
 }
 
-.asim-quick-task-select {
-  padding: 7px 10px;
-  font-size: 0.8rem;
-  border: 1px solid var(--asim-gray-300);
-  border-radius: var(--asim-radius-sm);
-  background-color: #ffffff;
-  color: var(--asim-gray-700);
-  outline: none;
-  cursor: pointer;
+.asim-quick-task-name {
+  flex: 2;
+  min-width: 150px;
+}
+
+.asim-quick-task-type {
+  flex: 1.2;
+  min-width: 130px;
+}
+
+.asim-quick-task-addr {
+  flex: 2;
+  min-width: 160px;
 }
 
 .asim-week-tasks-body {
@@ -1003,6 +1009,16 @@
   padding: 1px 6px;
   border-radius: 999px;
   font-size: 0.68rem;
+}
+
+.asim-task-unassigned {
+  background-color: var(--asim-gray-100);
+  color: var(--asim-gray-500);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  border: 1px dashed var(--asim-gray-300);
 }
 
 .asim-task-code {

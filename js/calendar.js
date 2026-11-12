@@ -469,11 +469,11 @@
               </div>
 
               <div class="asim-week-tasks-quickadd">
-                <input type="text" id="asim-quick-task-title" class="asim-quick-task-input" placeholder="+ Nuova attività da fare in settimana (premi Invio per salvare)...">
-                <select id="asim-quick-task-tech" class="asim-quick-task-select">
-                  <option value="">Tecnico non assegnato</option>
-                </select>
-                <button type="button" id="asim-quick-task-btn" class="asim-btn asim-btn-primary asim-btn-sm">+ Aggiungi</button>
+                <input type="text" id="asim-quick-task-name" class="asim-quick-task-input asim-quick-task-name" placeholder="Nome / Cliente *">
+                <input type="text" id="asim-quick-task-type" class="asim-quick-task-input asim-quick-task-type" placeholder="Tipologia (es. C03, A01...)" list="asim-quick-task-types">
+                <datalist id="asim-quick-task-types"></datalist>
+                <input type="text" id="asim-quick-task-addr" class="asim-quick-task-input asim-quick-task-addr" placeholder="Indirizzo">
+                <button type="button" id="asim-quick-task-btn" class="asim-btn asim-btn-primary asim-btn-sm">+ Aggiungi Attività</button>
               </div>
             </div>
 
@@ -1011,7 +1011,18 @@
 
         const ev = this.currentModalEvent;
         ev.clientName = root.querySelector('#edit-client').value.trim();
-        ev.date = root.querySelector('#edit-date').value;
+        const inputDate = root.querySelector('#edit-date').value.trim();
+        if (inputDate) {
+          ev.date = inputDate;
+          const dateParts = ev.date.split('-');
+          const timeParts = (root.querySelector('#edit-time').value || '09:00').split(':');
+          ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
+        } else {
+          if (!ev.date || !ev.date.startsWith('week_')) {
+            ev.date = this.getWeekKey(this.selectedDate);
+          }
+          ev.dateTime = null;
+        }
         ev.time = root.querySelector('#edit-time').value;
         ev.duration = parseFloat(root.querySelector('#edit-duration').value) || 1;
         ev.technician = root.querySelector('#edit-tech').value.trim() || 'Non assegnato';
@@ -1022,10 +1033,6 @@
         ev.pdr = root.querySelector('#edit-pdr').value.trim();
         ev.matricola = root.querySelector('#edit-matricola').value.trim();
         ev.note = root.querySelector('#edit-notes').value.trim();
-
-        const dateParts = ev.date.split('-');
-        const timeParts = ev.time.split(':');
-        ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
 
         this.saveEventsPermanently(ev, 'upsert');
         this.updateFilters();
@@ -1176,29 +1183,32 @@
       });
 
       // Gestione Quick-Add Attività Settimanale (senza giorno prefissato)
-      const quickInput = root.querySelector('#asim-quick-task-title');
-      const quickTech = root.querySelector('#asim-quick-task-tech');
+      const quickName = root.querySelector('#asim-quick-task-name');
+      const quickType = root.querySelector('#asim-quick-task-type');
+      const quickAddr = root.querySelector('#asim-quick-task-addr');
       const quickBtn = root.querySelector('#asim-quick-task-btn');
 
       const handleAddWeekTask = () => {
-        const title = quickInput ? quickInput.value.trim() : '';
-        if (!title) {
-          this.showToast('Inserisci un titolo o descrizione per l\'attività', 'error');
+        const name = quickName ? quickName.value.trim() : '';
+        if (!name) {
+          this.showToast('Inserisci il nome o cliente per l\'attività', 'error');
+          if (quickName) quickName.focus();
           return;
         }
 
+        const type = quickType ? quickType.value.trim() : '';
+        const addr = quickAddr ? quickAddr.value.trim() : '';
         const weekKey = this.getWeekKey(this.selectedDate);
-        const tech = quickTech ? quickTech.value.trim() : '';
 
         const newEv = {
           id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          clientName: title,
+          clientName: name,
           date: weekKey,
           time: '',
           duration: 1,
-          technician: tech || 'Non assegnato',
-          jobCode: 'Altro',
-          indirizzo: '',
+          technician: 'Non assegnato',
+          jobCode: type || 'Altro',
+          indirizzo: addr,
           telefono: '',
           priority: 2,
           pdr: '',
@@ -1211,22 +1221,27 @@
 
         this.events.push(newEv);
         this.saveEventsPermanently(newEv, 'upsert');
-        if (quickInput) quickInput.value = '';
+        if (quickName) quickName.value = '';
+        if (quickType) quickType.value = '';
+        if (quickAddr) quickAddr.value = '';
+        this.updateFilters();
         this.renderView();
-        this.showToast(`Attività "${title}" aggiunta alla settimana!`, 'success');
+        this.showToast(`Attività "${name}" aggiunta alla settimana!`, 'success');
       };
 
       if (quickBtn) {
         quickBtn.addEventListener('click', handleAddWeekTask);
       }
-      if (quickInput) {
-        quickInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAddWeekTask();
-          }
-        });
-      }
+      [quickName, quickType, quickAddr].forEach(inp => {
+        if (inp) {
+          inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAddWeekTask();
+            }
+          });
+        }
+      });
 
       // Drop zone per togliere la data e spostare un intervento tra le attività settimanali
       const weekTasksBody = root.querySelector('#asim-week-tasks-body');
@@ -2702,7 +2717,6 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const bodyEl = root.querySelector('#asim-week-tasks-body');
       const countEl = root.querySelector('#asim-week-tasks-count');
       const subtitleEl = root.querySelector('#asim-week-tasks-subtitle');
-      const techSelect = root.querySelector('#asim-quick-task-tech');
       if (!section || !bodyEl) return;
 
       const weekKey = this.getWeekKey(this.selectedDate);
@@ -2717,17 +2731,18 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         subtitleEl.textContent = `Attività da svolgere durante la settimana ${weekLabel}`;
       }
 
-      // Popola select dei tecnici per il quick add se necessario
-      if (techSelect) {
-        const curVal = techSelect.value;
-        let optHtml = '<option value="">Tecnico non assegnato</option>';
-        Array.from(this.technicians).forEach(tech => {
-          if (tech && tech !== 'Non assegnato') {
-            optHtml += `<option value="${this.escapeHtml(tech)}">@${this.escapeHtml(tech)}</option>`;
-          }
+      // Popola datalist con i codici/tipologie disponibili per il quick add
+      const typesDatalist = root.querySelector('#asim-quick-task-types');
+      if (typesDatalist) {
+        const allCodes = new Set(['A01', 'C03', 'D01', 'E01', 'Sopralluogo', 'Allaccio', 'Manutenzione', 'Altro']);
+        if (this.jobCodes) {
+          this.jobCodes.forEach(c => { if (c && c !== 'all') allCodes.add(c); });
+        }
+        let dlHtml = '';
+        allCodes.forEach(code => {
+          dlHtml += `<option value="${this.escapeHtml(code)}">`;
         });
-        techSelect.innerHTML = optHtml;
-        if (curVal) techSelect.value = curVal;
+        typesDatalist.innerHTML = dlHtml;
       }
 
       // Filtra le attività settimanali senza giorno prefissato
@@ -2765,7 +2780,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (weekTasks.length === 0) {
         bodyEl.innerHTML = `
           <div class="asim-tasks-empty">
-            <span>Nessuna attività inserita per la settimana ${weekLabel}. Scrivi un'attività nel campo sopra oppure trascina qui un intervento dal calendario per togliergli la data prefissata.</span>
+            <span>Nessuna attività inserita per la settimana ${weekLabel}. Inserisci un'attività indicando Nome, Tipologia e Indirizzo sopra, oppure trascina qui un intervento dal calendario per togliergli la data prefissata.</span>
           </div>
         `;
         return;
@@ -2782,15 +2797,15 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             <div class="asim-task-content">
               <div class="asim-task-title">${this.escapeHtml(ev.clientName)}</div>
               <div class="asim-task-meta">
-                ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : ''}
-                ${ev.jobCode && ev.jobCode !== 'Altro' ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
+                ${ev.jobCode ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
                 ${ev.indirizzo ? `<span class="asim-task-addr" title="${this.escapeHtml(ev.indirizzo)}">📍 ${this.escapeHtml(ev.indirizzo)}</span>` : ''}
+                ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : '<span class="asim-task-unassigned">Non assegnato</span>'}
                 ${cleanNote ? `<span class="asim-task-note" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</span>` : ''}
               </div>
             </div>
             <div class="asim-task-actions">
               <button type="button" class="asim-btn asim-btn-xs asim-btn-outline asim-task-schedule-btn" data-id="${ev.id}" title="Pianifica in un giorno specifico">📅 Pianifica</button>
-              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-task-edit-btn" data-id="${ev.id}" title="Modifica dettagli">✏️</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-task-edit-btn" data-id="${ev.id}" title="Modifica e assegna tecnico">✏️</button>
               <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-btn-danger asim-task-delete-btn" data-id="${ev.id}" title="Elimina attività">🗑️</button>
             </div>
           </div>
@@ -2822,12 +2837,22 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         });
       });
 
-      bodyEl.querySelectorAll('.asim-task-schedule-btn, .asim-task-edit-btn').forEach(btn => {
+      bodyEl.querySelectorAll('.asim-task-schedule-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const ev = this.events.find(x => x.id === btn.dataset.id);
           if (ev) {
-            this.openEditMode(ev);
+            this.openEditMode(ev, 'date');
+          }
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev) {
+            this.openEditMode(ev, 'edit');
           }
         });
       });
@@ -2944,20 +2969,26 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       }
 
       // Data e Ora
-      const parts = ev.date.split('-');
-      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-      const dateFormatted = d.toLocaleDateString('it-IT', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-      const duration = parseFloat(ev.duration) || 1;
-      const endTime = this.calculateEndTime(ev.time, duration);
-      const durationLabel = this.formatDuration(duration);
-      this.container.querySelector('#modal-date-text').textContent = `${dateFormatted} dalle ${ev.time} alle ${endTime}`;
-      const durBadge = this.container.querySelector('#modal-duration-badge');
-      if (durBadge) durBadge.textContent = `⏱️ ${durationLabel}`;
+      if (ev.date && !ev.date.startsWith('week_') && ev.date.includes('-')) {
+        const parts = ev.date.split('-');
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const dateFormatted = d.toLocaleDateString('it-IT', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+        const duration = parseFloat(ev.duration) || 1;
+        const endTime = this.calculateEndTime(ev.time, duration);
+        const durationLabel = this.formatDuration(duration);
+        this.container.querySelector('#modal-date-text').textContent = `${dateFormatted} dalle ${ev.time || '09:00'} alle ${endTime}`;
+        const durBadge = this.container.querySelector('#modal-duration-badge');
+        if (durBadge) durBadge.textContent = `⏱️ ${durationLabel}`;
+      } else {
+        this.container.querySelector('#modal-date-text').textContent = `Attività da fare durante la settimana (non pianificata in un giorno fisso)`;
+        const durBadge = this.container.querySelector('#modal-duration-badge');
+        if (durBadge) durBadge.textContent = `📅 Da pianificare`;
+      }
 
       // Indirizzo
       const addrRow = this.container.querySelector('#modal-addr-row');
@@ -3006,8 +3037,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
     }
 
     // Passa alla modalità modifica di un intervento esistente
-    openEditMode(ev) {
+    openEditMode(ev, focusField = null) {
+      this.currentModalEvent = ev;
       const root = this.container;
+      const modal = root.querySelector('#asim-modal');
       const viewMode = root.querySelector('#modal-view-mode');
       const editMode = root.querySelector('#modal-edit-mode');
       const btnEdit = root.querySelector('#modal-btn-edit');
@@ -3015,6 +3048,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const btnDelete = root.querySelector('#edit-btn-delete');
       const headerBadges = root.querySelector('#modal-header-badges');
 
+      if (modal) modal.style.display = 'flex';
       if (viewMode) viewMode.style.display = 'none';
       if (editMode) editMode.style.display = 'block';
       if (btnEdit) btnEdit.style.display = 'none';
@@ -3023,7 +3057,13 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (headerBadges) headerBadges.style.display = 'flex';
 
       const editTitle = editMode.querySelector('h3');
-      if (editTitle) editTitle.innerHTML = '✏️ Modifica Intervento';
+      if (editTitle) {
+        if (focusField === 'date') {
+          editTitle.innerHTML = '📅 Pianifica Intervento a Calendario';
+        } else {
+          editTitle.innerHTML = '✏️ Modifica Intervento / Attività';
+        }
+      }
 
       const saveBtn = root.querySelector('#edit-btn-save');
       if (saveBtn) saveBtn.innerHTML = '💾 Salva Modifiche';
@@ -3032,7 +3072,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       root.querySelector('#edit-date').value = (ev.date && !ev.date.startsWith('week_') && ev.date.includes('-')) ? ev.date : '';
       root.querySelector('#edit-time').value = ev.time || '09:00';
       root.querySelector('#edit-duration').value = String(ev.duration || 1);
-      root.querySelector('#edit-tech').value = ev.technician || '';
+      root.querySelector('#edit-tech').value = (ev.technician && ev.technician !== 'Non assegnato') ? ev.technician : '';
       root.querySelector('#edit-code').value = ev.jobCode || '';
       root.querySelector('#edit-address').value = ev.indirizzo || '';
       root.querySelector('#edit-phone').value = ev.telefono || '';
@@ -3047,10 +3087,22 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       if (datalist) {
         datalist.innerHTML = '';
         Array.from(this.technicians).forEach(tech => {
-          const opt = document.createElement('option');
-          opt.value = tech;
-          datalist.appendChild(opt);
+          if (tech && tech !== 'Non assegnato') {
+            const opt = document.createElement('option');
+            opt.value = tech;
+            datalist.appendChild(opt);
+          }
         });
+      }
+
+      if (focusField === 'date') {
+        const dateInput = root.querySelector('#edit-date');
+        if (dateInput) {
+          if (!dateInput.value) {
+            dateInput.value = this.formatISODate(this.selectedDate);
+          }
+          setTimeout(() => dateInput.focus(), 60);
+        }
       }
     }
 
