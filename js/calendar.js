@@ -2444,6 +2444,8 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       });
     }
 
+    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili)
+    renderWeekCardHtml(ev, dayTag = '') {
     // Converte una stringa orario "HH:MM" in minuti totali dalla mezzanotte
     timeToMinutes(timeStr) {
       if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return 540;
@@ -2523,12 +2525,14 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const colors = this.getTechColor(ev.technician);
       const duration = parseFloat(ev.duration) || 1;
       const endTime = this.calculateEndTime(ev.time, duration);
+      const cardHeight = this.calculateCardHeight(duration);
       const cardHeight = isSplit ? 'auto' : `${this.calculateCardHeight(duration)}px`;
       const durationLabel = this.formatDuration(duration);
       const hasConflict = Boolean(this.findOverlappingEvent(ev.date, ev.time, duration, ev.technician, ev.id));
       const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
 
       return `
+        <div class="asim-card-event ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight}px;" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
         <div class="asim-card-event ${isSplit ? 'is-split' : ''} ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
           <div>
             <div class="asim-card-top">
@@ -2598,6 +2602,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         if (dayEvents.length === 0) {
           html += `<div class="asim-empty-day" data-date="${iso}" title="Clicca per aggiungere un intervento">+ Nessun intervento</div>`;
         } else {
+          dayEvents.forEach(ev => {
+            html += this.renderWeekCardHtml(ev);
+          });
           html += this.renderDayEventsHtml(dayEvents);
         }
 
@@ -2641,6 +2648,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <button class="asim-mini-add-btn" data-date="${isoSat}" title="Aggiungi intervento per Sabato ${dSat.getDate()}">+</button>
             </div>
           `;
+          satEvents.forEach(ev => {
+            html += this.renderWeekCardHtml(ev, 'Sab');
+          });
           html += this.renderDayEventsHtml(satEvents, 'Sab');
         }
         if (sunEvents.length > 0) {
@@ -2651,6 +2661,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
               <button class="asim-mini-add-btn" data-date="${isoSun}" title="Aggiungi intervento per Domenica ${dSun.getDate()}">+</button>
             </div>
           `;
+          sunEvents.forEach(ev => {
+            html += this.renderWeekCardHtml(ev, 'Dom');
+          });
           html += this.renderDayEventsHtml(sunEvents, 'Dom');
         }
       }
