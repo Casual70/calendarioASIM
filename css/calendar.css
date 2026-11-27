@@ -718,6 +718,32 @@
   margin-bottom: 4px;
 }
 
+.asim-card-time-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.asim-card-check {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #16a34a;
+  flex-shrink: 0;
+}
+
+.asim-card-event.is-completed {
+  opacity: 0.52;
+  background-color: #f8fafc;
+}
+
+.asim-card-event.is-completed .asim-card-title {
+  text-decoration: line-through;
+  color: var(--asim-gray-500);
+}
+
 .asim-card-time {
   font-weight: 700;
   font-size: 0.75rem;
@@ -963,6 +989,43 @@
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
+}
+
+/* Sezione Promemoria Settimane Successive */
+.asim-future-tasks-section {
+  background-color: #fcfcfd;
+  border-top: 1px solid var(--asim-gray-200);
+  margin-top: 0;
+}
+
+.asim-future-tasks-icon {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.asim-future-tasks-badge {
+  background-color: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.asim-future-tasks-body {
+  background-color: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.asim-future-tasks-body.drag-over {
+  background-color: #fef3c7;
+  border-color: #d97706;
+}
+
+.asim-future-task-item {
+  border-left: 3px solid #f59e0b;
+}
+
+.asim-future-pin {
+  font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
 .asim-week-tasks-quickadd {

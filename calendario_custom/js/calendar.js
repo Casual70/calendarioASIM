@@ -209,10 +209,10 @@
       return 'week_' + this.formatISODate(startOfWeek);
     }
 
-    // Determina se un elemento è un'attività della settimana (senza giorno prefissato)
+    // Determina se un elemento è un'attività senza giorno prefissato (settimana corrente o promemoria future)
     isWeekTask(ev) {
       if (!ev || !ev.date) return false;
-      return typeof ev.date === 'string' && (ev.date.startsWith('week_') || ev.date === 'unscheduled');
+      return typeof ev.date === 'string' && (ev.date.startsWith('week_') || ev.date === 'unscheduled' || ev.date === 'future_week');
     }
 
     // Calcola l'orario di fine a partire da start ("HH:MM") e durata in ore (es. 1, 1.5, 2)
@@ -516,6 +516,44 @@
 
             <!-- Area Dropzone e Lista Attività -->
             <div class="asim-week-tasks-body" id="asim-week-tasks-body" data-week-zone="true">
+              <!-- Render dinamico -->
+            </div>
+          </div>
+
+          <!-- Sezione Promemoria Settimane Successive (Senza giorno prefissato) -->
+          <div class="asim-week-tasks-section asim-future-tasks-section" id="asim-future-tasks-section">
+            <div class="asim-week-tasks-header">
+              <div class="asim-week-tasks-title-group">
+                <div class="asim-week-tasks-icon asim-future-tasks-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                    <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"></path>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="asim-week-tasks-title">Promemoria Settimane Successive (Senza giorno prefissato)</h3>
+                  <span class="asim-week-tasks-subtitle">Appunti e attività future da tenere in memoria per le prossime settimane</span>
+                </div>
+                <span class="asim-week-tasks-badge asim-future-tasks-badge" id="asim-future-tasks-count">0 promemoria</span>
+              </div>
+
+              <div class="asim-week-tasks-quickadd">
+                <input type="text" id="asim-future-task-name" class="asim-quick-task-input asim-quick-task-name" placeholder="Nome / Cliente *">
+                <input type="text" id="asim-future-task-type" class="asim-quick-task-input asim-quick-task-type" placeholder="Tipologia (es. C03, A01...)" list="asim-quick-task-types">
+                <input type="text" id="asim-future-task-addr" class="asim-quick-task-input asim-quick-task-addr" placeholder="Indirizzo">
+                <div class="asim-acc-toggle-group" id="asim-future-acc-group" title="Accessibilità: acc (verde) o inac (arancione)">
+                  <button type="button" class="asim-acc-toggle-btn is-acc is-active" data-val="acc" title="Accessibile (verde)">acc</button>
+                  <button type="button" class="asim-acc-toggle-btn is-inac" data-val="inac" title="Inaccessibile (arancione)">inac</button>
+                </div>
+                <button type="button" id="asim-future-task-btn" class="asim-btn asim-btn-outline asim-btn-sm">+ Aggiungi Promemoria</button>
+              </div>
+            </div>
+
+            <!-- Area Dropzone e Lista Promemoria Futuri -->
+            <div class="asim-week-tasks-body asim-future-tasks-body" id="asim-future-tasks-body" data-future-zone="true">
               <!-- Render dinamico -->
             </div>
           </div>
@@ -1084,8 +1122,8 @@
           const timeParts = (root.querySelector('#edit-time').value || '09:00').split(':');
           ev.dateTime = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), parseInt(timeParts[0] || 9), parseInt(timeParts[1] || 0));
         } else {
-          // Se la data rimane vuota, mantieni o sposta tra le attività della settimana corrente
-          if (!ev.date || !ev.date.startsWith('week_')) {
+          // Se la data rimane vuota, mantieni la sezione corrente (settimana o promemoria) o sposta nella settimana corrente
+          if (!ev.date || (!ev.date.startsWith('week_') && ev.date !== 'future_week')) {
             ev.date = this.getWeekKey(this.selectedDate);
           }
           ev.dateTime = null;
@@ -1254,80 +1292,82 @@
         });
       });
 
-      // Gestione Quick-Add Attività Settimanale (senza giorno prefissato)
-      const quickName = root.querySelector('#asim-quick-task-name');
-      const quickType = root.querySelector('#asim-quick-task-type');
-      const quickAddr = root.querySelector('#asim-quick-task-addr');
-      const quickAccGroup = root.querySelector('#asim-quick-acc-group');
-      const quickBtn = root.querySelector('#asim-quick-task-btn');
+      // Gestione Quick-Add per Attività Settimanali e Promemoria Settimane Successive
+      const setupQuickAdd = (prefix, getTargetDate, labelNoun) => {
+        const nameEl = root.querySelector(`#${prefix}-name`);
+        const typeEl = root.querySelector(`#${prefix}-type`);
+        const addrEl = root.querySelector(`#${prefix}-addr`);
+        const accGroup = root.querySelector(`#${prefix === 'asim-quick-task' ? 'asim-quick-acc-group' : 'asim-future-acc-group'}`);
+        const btnEl = root.querySelector(`#${prefix}-btn`);
 
-      if (quickAccGroup) {
-        quickAccGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            quickAccGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(b => b.classList.remove('is-active'));
-            btn.classList.add('is-active');
+        if (accGroup) {
+          accGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              accGroup.querySelectorAll('.asim-acc-toggle-btn').forEach(b => b.classList.remove('is-active'));
+              btn.classList.add('is-active');
+            });
           });
-        });
-      }
-
-      const handleAddWeekTask = () => {
-        const name = quickName ? quickName.value.trim() : '';
-        if (!name) {
-          this.showToast('Inserisci il nome o cliente per l\'attività', 'error');
-          if (quickName) quickName.focus();
-          return;
         }
 
-        const type = quickType ? quickType.value.trim() : '';
-        const addr = quickAddr ? quickAddr.value.trim() : '';
-        const weekKey = this.getWeekKey(this.selectedDate);
-        const activeAccBtn = quickAccGroup ? quickAccGroup.querySelector('.asim-acc-toggle-btn.is-active') : null;
-        const accVal = activeAccBtn ? activeAccBtn.dataset.val : 'acc';
+        const handleAdd = () => {
+          const name = nameEl ? nameEl.value.trim() : '';
+          if (!name) {
+            this.showToast(`Inserisci il nome o cliente per ${labelNoun}`, 'error');
+            if (nameEl) nameEl.focus();
+            return;
+          }
 
-        const newEv = {
-          id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          clientName: name,
-          date: weekKey,
-          time: '',
-          duration: 1,
-          technician: 'Non assegnato',
-          jobCode: type || 'Altro',
-          indirizzo: addr,
-          telefono: '',
-          priority: 2,
-          accessibilita: accVal,
-          pdr: '',
-          matricola: '',
-          note: '',
-          author: 'Operatore',
-          isCompleted: false,
-          rawDate: ''
+          const type = typeEl ? typeEl.value.trim() : '';
+          const addr = addrEl ? addrEl.value.trim() : '';
+          const activeAccBtn = accGroup ? accGroup.querySelector('.asim-acc-toggle-btn.is-active') : null;
+          const accVal = activeAccBtn ? activeAccBtn.dataset.val : 'acc';
+
+          const newEv = {
+            id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            clientName: name,
+            date: getTargetDate(),
+            time: '',
+            duration: 1,
+            technician: 'Non assegnato',
+            jobCode: type || 'Altro',
+            indirizzo: addr,
+            telefono: '',
+            priority: 2,
+            accessibilita: accVal,
+            pdr: '',
+            matricola: '',
+            note: '',
+            author: 'Operatore',
+            isCompleted: false,
+            rawDate: ''
+          };
+
+          this.events.push(newEv);
+          this.saveEventsPermanently(newEv, 'upsert');
+          if (nameEl) nameEl.value = '';
+          if (typeEl) typeEl.value = '';
+          if (addrEl) addrEl.value = '';
+          this.updateFilters();
+          this.renderView();
+          this.showToast(`"${name}" (${accVal.toUpperCase()}) aggiunto a ${labelNoun}!`, 'success');
         };
 
-        this.events.push(newEv);
-        this.saveEventsPermanently(newEv, 'upsert');
-        if (quickName) quickName.value = '';
-        if (quickType) quickType.value = '';
-        if (quickAddr) quickAddr.value = '';
-        this.updateFilters();
-        this.renderView();
-        this.showToast(`Attività "${name}" (${accVal.toUpperCase()}) aggiunta alla settimana!`, 'success');
+        if (btnEl) btnEl.addEventListener('click', handleAdd);
+        [nameEl, typeEl, addrEl].forEach(inp => {
+          if (inp) {
+            inp.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAdd();
+              }
+            });
+          }
+        });
       };
 
-      if (quickBtn) {
-        quickBtn.addEventListener('click', handleAddWeekTask);
-      }
-      [quickName, quickType, quickAddr].forEach(inp => {
-        if (inp) {
-          inp.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleAddWeekTask();
-            }
-          });
-        }
-      });
+      setupQuickAdd('asim-quick-task', () => this.getWeekKey(this.selectedDate), 'attività della settimana');
+      setupQuickAdd('asim-future-task', () => 'future_week', 'promemoria settimane successive');
 
       // Click rapido per commutare acc / inac su qualsiasi badge del calendario o lista
       root.addEventListener('click', (e) => {
@@ -1352,33 +1392,55 @@
         }
       });
 
-      // Drop zone per togliere la data e spostare un intervento tra le attività settimanali
-      const weekTasksBody = root.querySelector('#asim-week-tasks-body');
-      if (weekTasksBody) {
-        weekTasksBody.addEventListener('dragover', (e) => {
+      // Check rapido "fatto / completata" sulle card del calendario settimanale
+      root.addEventListener('change', (e) => {
+        const completeChk = e.target.closest('[data-action="toggle-complete"]');
+        if (completeChk) {
+          e.stopPropagation();
+          const eventId = completeChk.dataset.id;
+          const ev = this.events.find(x => x.id === eventId);
+          if (ev) {
+            ev.isCompleted = completeChk.checked;
+            this.saveEventsPermanently(ev, 'upsert');
+            this.renderView();
+            this.showToast(
+              ev.isCompleted ? `"${ev.clientName}" segnata come completata.` : `"${ev.clientName}" riaperta come da fare.`,
+              'info'
+            );
+          }
+        }
+      });
+
+      // Drop zone per spostare interventi tra attività settimanali o promemoria settimane successive
+      const setupDropZone = (selector, getTargetDate, msgFn) => {
+        const el = root.querySelector(selector);
+        if (!el) return;
+        el.addEventListener('dragover', (e) => {
           e.preventDefault();
-          weekTasksBody.classList.add('drag-over');
+          el.classList.add('drag-over');
         });
-        weekTasksBody.addEventListener('dragleave', (e) => {
-          if (!weekTasksBody.contains(e.relatedTarget)) {
-            weekTasksBody.classList.remove('drag-over');
+        el.addEventListener('dragleave', (e) => {
+          if (!el.contains(e.relatedTarget)) {
+            el.classList.remove('drag-over');
           }
         });
-        weekTasksBody.addEventListener('drop', (e) => {
+        el.addEventListener('drop', (e) => {
           e.preventDefault();
-          weekTasksBody.classList.remove('drag-over');
+          el.classList.remove('drag-over');
           const eventId = e.dataTransfer.getData('text/plain');
           const ev = this.events.find(x => x.id === eventId);
           if (ev) {
-            const weekKey = this.getWeekKey(this.selectedDate);
-            ev.date = weekKey;
+            ev.date = getTargetDate();
             ev.time = '';
             this.saveEventsPermanently(ev, 'upsert');
             this.renderView();
-            this.showToast(`Intervento "${ev.clientName}" spostato tra le attività da fare in settimana!`, 'success');
+            this.showToast(msgFn(ev), 'success');
           }
         });
-      }
+      };
+
+      setupDropZone('#asim-week-tasks-body', () => this.getWeekKey(this.selectedDate), (ev) => `Intervento "${ev.clientName}" spostato nelle attività della settimana!`);
+      setupDropZone('#asim-future-tasks-body', () => 'future_week', (ev) => `"${ev.clientName}" spostato nei promemoria delle settimane successive!`);
     }
 
     // Carica dati iniziali da Turso DB (o fallback locale)
@@ -2239,8 +2301,9 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
         this.renderListView(body, label, filtered);
       }
 
-      // Renderizza sempre sotto il calendario le attività da fare durante la settimana
+      // Renderizza sempre sotto il calendario le attività da fare durante la settimana e i promemoria futuri
       this.renderWeekTasks();
+      this.renderFutureTasks();
 
       // Aggiorna intestazione per la stampa
       const printTitle = this.container.querySelector('#asim-print-view-title');
@@ -2518,7 +2581,7 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       return html;
     }
 
-    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili e supporto split affiancato)
+    // Costruisce l'HTML di un card intervento per la vista settimana (con note ben visibili, check completamento e supporto split affiancato)
     renderWeekCardHtml(ev, dayTag = '', isSplit = false) {
       const colors = this.getTechColor(ev.technician);
       const duration = parseFloat(ev.duration) || 1;
@@ -2529,10 +2592,13 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
       const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
 
       return `
-        <div class="asim-card-event ${isSplit ? 'is-split' : ''} ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
+        <div class="asim-card-event ${isSplit ? 'is-split' : ''} ${ev.isCompleted ? 'is-completed' : ''} ${hasConflict ? 'asim-card-conflict' : ''}" draggable="true" data-id="${ev.id}" style="border-left: 4px solid ${colors.border}; min-height: ${cardHeight};" title="Trascina per spostare: ${this.escapeHtml(ev.clientName)} (Fascia oraria occupata: ${ev.time} - ${endTime})">
           <div>
             <div class="asim-card-top">
-              <span class="asim-card-time">${dayTag ? `<span class="asim-badge-day-tag">${dayTag}</span> ` : ''}${ev.time} - ${endTime}</span>
+              <div class="asim-card-time-wrap">
+                <input type="checkbox" class="asim-card-check" data-action="toggle-complete" data-id="${ev.id}" ${ev.isCompleted ? 'checked' : ''} title="${ev.isCompleted ? 'Segna come da fare' : 'Segna come completata'}">
+                <span class="asim-card-time">${dayTag ? `<span class="asim-badge-day-tag">${dayTag}</span> ` : ''}${ev.time} - ${endTime}</span>
+              </div>
               <div class="asim-card-top-badges">
                 ${this.renderAccBadge(ev, true)}
                 <span class="asim-badge asim-badge-code-sm">${ev.jobCode}</span>
@@ -2665,7 +2731,10 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
 
       // Click e Drag sui card evento
       container.querySelectorAll('.asim-card-event').forEach(card => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('[data-action="toggle-complete"]') || e.target.closest('[data-action="toggle-acc"]')) {
+            return;
+          }
           const ev = this.events.find(x => x.id === card.dataset.id);
           if (ev) this.openModal(ev);
         });
@@ -3093,6 +3162,127 @@ task,SABATINI CHIARA A01 @Goracci,"PDR: 11712010140137\\nMatricola : 6725567\\nT
             this.saveEventsPermanently(ev, 'delete');
             this.renderView();
             this.showToast('Attività eliminata.', 'info');
+          }
+        });
+      });
+    }
+
+    // Renderizza la sezione dei promemoria per le settimane successive (senza giorno prefissato)
+    renderFutureTasks() {
+      const root = this.container;
+      const section = root.querySelector('#asim-future-tasks-section');
+      const bodyEl = root.querySelector('#asim-future-tasks-body');
+      const countEl = root.querySelector('#asim-future-tasks-count');
+      if (!section || !bodyEl) return;
+
+      let futureTasks = this.events.filter(ev => ev.date === 'future_week');
+
+      if (this.activeTechnician && this.activeTechnician !== 'all') {
+        futureTasks = futureTasks.filter(ev => (ev.technician || '').toLowerCase() === this.activeTechnician.toLowerCase());
+      }
+      if (this.activeJobCode && this.activeJobCode !== 'all') {
+        futureTasks = futureTasks.filter(ev => (ev.jobCode || '').toLowerCase() === this.activeJobCode.toLowerCase());
+      }
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        futureTasks = futureTasks.filter(ev => {
+          return (ev.clientName || '').toLowerCase().includes(q) ||
+                 (ev.note || '').toLowerCase().includes(q) ||
+                 (ev.indirizzo || '').toLowerCase().includes(q) ||
+                 (ev.jobCode || '').toLowerCase().includes(q) ||
+                 (ev.technician || '').toLowerCase().includes(q);
+        });
+      }
+
+      if (countEl) {
+        countEl.textContent = `${futureTasks.length} promemoria`;
+      }
+
+      if (futureTasks.length === 0) {
+        bodyEl.innerHTML = `
+          <div class="asim-tasks-empty">
+            <span>Nessun promemoria per le settimane successive. Annota qui attività future senza giorno prefissato da tenere in memoria.</span>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      futureTasks.forEach(ev => {
+        const colors = this.getTechColor(ev.technician);
+        const cleanNote = ev.note ? ev.note.replace(/^NOTE:\s*/i, '').trim() : '';
+
+        html += `
+          <div class="asim-task-item asim-future-task-item" draggable="true" data-id="${ev.id}" title="Trascina su un giorno o nelle attività della settimana corrente">
+            <span class="asim-future-pin" title="Promemoria settimane successive">📌</span>
+            ${this.renderAccBadge(ev, true)}
+            <div class="asim-task-title" title="${this.escapeHtml(ev.clientName)}">${this.escapeHtml(ev.clientName)}</div>
+            ${ev.jobCode ? `<span class="asim-task-code">${this.escapeHtml(ev.jobCode)}</span>` : ''}
+            ${ev.indirizzo ? `<span class="asim-task-addr" title="${this.escapeHtml(ev.indirizzo)}">📍 ${this.escapeHtml(ev.indirizzo)}</span>` : ''}
+            ${ev.technician && ev.technician !== 'Non assegnato' ? `<span class="asim-task-tech" style="background:${colors.bg}; color:${colors.text}; border: 1px solid ${colors.border};">@${this.escapeHtml(ev.technician)}</span>` : ''}
+            ${cleanNote ? `<span class="asim-task-note-pill" title="${this.escapeHtml(cleanNote)}">📝 ${this.escapeHtml(cleanNote)}</span>` : ''}
+            <div class="asim-task-actions">
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-outline asim-task-promote-btn" data-id="${ev.id}" title="Sposta tra le attività della settimana corrente">➡️ Settimana</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-outline asim-task-schedule-btn" data-id="${ev.id}" title="Pianifica in un giorno specifico">📅 Pianifica</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-task-edit-btn" data-id="${ev.id}" title="Modifica promemoria">✏️</button>
+              <button type="button" class="asim-btn asim-btn-xs asim-btn-icon asim-btn-danger asim-task-delete-btn" data-id="${ev.id}" title="Elimina promemoria">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+
+      bodyEl.innerHTML = html;
+
+      bodyEl.querySelectorAll('.asim-task-item').forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData('text/plain', card.dataset.id);
+          card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragend', () => {
+          card.classList.remove('is-dragging');
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-promote-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev) {
+            ev.date = this.getWeekKey(this.selectedDate);
+            ev.time = '';
+            this.saveEventsPermanently(ev, 'upsert');
+            this.renderView();
+            this.showToast(`"${ev.clientName}" spostato nelle attività della settimana corrente!`, 'success');
+          }
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-schedule-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev) this.openEditMode(ev, 'date');
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev) this.openEditMode(ev, 'edit');
+        });
+      });
+
+      bodyEl.querySelectorAll('.asim-task-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ev = this.events.find(x => x.id === btn.dataset.id);
+          if (ev && confirm(`Eliminare il promemoria "${ev.clientName}"?`)) {
+            this.events = this.events.filter(x => x.id !== ev.id);
+            this.saveEventsPermanently(ev, 'delete');
+            this.renderView();
+            this.showToast('Promemoria eliminato.', 'info');
           }
         });
       });
