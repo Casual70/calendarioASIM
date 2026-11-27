@@ -961,35 +961,58 @@
         });
       });
 
-      // Drag and Drop CSV
+      // Traccia drag interno per non attivare l'overlay CSV quando si trascinano card/attività
+      this.isInternalDragging = false;
+      root.addEventListener('dragstart', () => {
+        this.isInternalDragging = true;
+      });
+      root.addEventListener('dragend', () => {
+        this.isInternalDragging = false;
+        if (dropzone) dropzone.classList.remove('visible');
+      });
+
+      // Drag and Drop CSV (solo per file esterni, mai per drag interno di card/attività)
       const dropzone = root.querySelector('#asim-dropzone');
+      const isExternalFileDrag = (e) => {
+        if (this.isInternalDragging) return false;
+        const types = e.dataTransfer ? Array.from(e.dataTransfer.types || []) : [];
+        return types.includes('Files');
+      };
+
       ['dragenter', 'dragover'].forEach(eventName => {
         root.addEventListener(eventName, (e) => {
+          if (!isExternalFileDrag(e)) return;
           e.preventDefault();
           e.stopPropagation();
-          dropzone.classList.add('visible');
+          if (dropzone) dropzone.classList.add('visible');
         });
       });
 
       ['dragleave', 'drop'].forEach(eventName => {
         root.addEventListener(eventName, (e) => {
+          if (!isExternalFileDrag(e) && !(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0)) {
+            if (dropzone) dropzone.classList.remove('visible');
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
-          if (e.type === 'drop' || (e.relatedTarget && !root.contains(e.relatedTarget))) {
-            dropzone.classList.remove('visible');
+          if (e.type === 'drop' || !e.relatedTarget || !root.contains(e.relatedTarget)) {
+            if (dropzone) dropzone.classList.remove('visible');
           }
         });
       });
 
       root.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt ? dt.files : null;
+        if (!files || files.length === 0) {
+          if (dropzone) dropzone.classList.remove('visible');
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
-        dropzone.classList.remove('visible');
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files && files.length > 0) {
-          this.handleFileUpload(files[0]);
-        }
+        if (dropzone) dropzone.classList.remove('visible');
+        this.handleFileUpload(files[0]);
       });
 
       // Chiusura Modale
